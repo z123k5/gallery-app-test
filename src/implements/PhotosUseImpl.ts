@@ -17,7 +17,7 @@ export const usePhotoGallery = () => {
             source: CameraSource.Camera,
             quality: 100,
         });
-        
+
         const fileName = new Date().getTime() + '.jpeg';
         const savedFileImage = {
             filepath: fileName,
