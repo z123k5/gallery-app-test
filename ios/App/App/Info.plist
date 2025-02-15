@@ -46,6 +46,9 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 		<true />
 
+		<key>NSCameraUsageDescription</key>
+		<string>We're using your camera to cap pictures</string>
+
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string> We're about to display albums on app and collect them for search (getting albums and media)</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
