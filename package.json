@@ -14,6 +14,7 @@
   "dependencies": {
     "@capacitor-community/media": "^8.0.0",
     "@capacitor-community/sqlite": "^7.0.0",
+    "@capacitor/android": "7.0.1",
     "@capacitor/app": "7.0.0",
     "@capacitor/camera": "^7.0.0",
     "@capacitor/core": "7.0.1",
@@ -26,6 +27,7 @@
     "@ionic/pwa-elements": "^3.3.0",
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
+    "capacitor-gallery-plus": "^0.1.1",
     "crypto-js": "^4.2.0",
     "ionicons": "^7.0.0",
     "jdenticon": "^3.3.0",

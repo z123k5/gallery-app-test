@@ -24,11 +24,13 @@
 </template>
 
 <script lang="ts">
-import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFab, IonFabButton, IonIcon } from '@ionic/vue';
+import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFab, IonFabButton, IonIcon, toastController } from '@ionic/vue';
+import { GalleryPlus } from 'capacitor-gallery-plus';
 import { camera } from 'ionicons/icons';
 
 export default {
   setup() {
+    
     return {
       camera
     }
