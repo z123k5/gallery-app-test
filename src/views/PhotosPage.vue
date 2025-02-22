@@ -23,7 +23,7 @@
       <p> Photos & videos </p>
 
       <div id="photo-wall" class="photo-wall">
-        <div v-for="media in medias" :key="media.id" class="photo-item" @click="showActionSheet(media)"
+        <div v-for="media in medias" :key="media.id" class="photo-item" @click="showActionSheet(media)" oading="lazy"
           :style="{ backgroundImage: 'url(' + media.thumbnail + ')' }">
           <div v-if="media.type === 'video'"
             style="position: absolute; bottom: 5px; left: 5px; color: white; background-color: rgba(0, 0, 0, 0.5); padding: 2px 5px; border-radius: 3px; font-size: 10px">
@@ -79,6 +79,7 @@ import {
   // IonCol,
   // IonImg,
   IonSearchbar,
+  modalController,
   toastController,
   // IonThumbnail,
   // GestureDetail,
@@ -95,6 +96,7 @@ import * as jdenticon from 'jdenticon';
 // Local Database
 import { UserDO } from '@/components/models';
 import StorageService from '@/implements/StorageService';
+import MediaInfoModalComponent from '../components/MediaInfoModalComponent.vue';
 
 export default {
   components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
@@ -112,12 +114,6 @@ export default {
     const db = ref(null);
     const dbInitialized = computed(() => !!db.value);
     const platform = sqliteServ.getPlatform();
-
-
-
-
-
-    console.log('ok');
 
     // Open Database
     const openDatabase = async () => {
@@ -477,6 +473,36 @@ export default {
         message: `id: ${media.id}\n <br/>type: ${media.type}\nwidth: ${media.width}\nheight: ${media.height}\nfileSize: ${media.fileSize}\n`,
         duration: 2000,
       }).then((toast) => { toast.present(); })
+
+      // const data = await GalleryPlus.getMedia({
+      //   id: media.id,
+      //   includeBaseColor: true,
+      //   includeDetails: true,
+      //   includePath: true
+      // });
+
+      const modal = await modalController.create({
+        component: MediaInfoModalComponent,
+        componentProps: {
+          // media: data
+          media: {
+            id: media.id,
+            type: media.type,
+            createdAt: media.createdAt,
+            baseColor: media.baseColor,
+            name: media.name,
+            width: media.width,
+            height: media.height,
+            thumbnail: media.thumbnail,
+            fileSize: media.fileSize,
+            // path: media.path,
+            mimeType: media.mimeType,
+          }
+        },
+        presentingElement: document.querySelector('.ion-page') as any
+      });
+
+      await modal.present();
 
       // handleScroll(event: any) {
       //   if (event.detail.scrollTop > 50) {
