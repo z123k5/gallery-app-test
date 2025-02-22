@@ -474,30 +474,17 @@ export default {
       //   duration: 2000,
       // }).then((toast) => { toast.present(); })
 
-      // const data = await GalleryPlus.getMedia({
-      //   id: media.id,
-      //   includeBaseColor: true,
-      //   includeDetails: true,
-      //   includePath: true
-      // });
+      const data = await GalleryPlus.getMedia({
+        id: media.id,
+        includeBaseColor: true,
+        includeDetails: true,
+        includePath: true
+      });
 
       const modal = await modalController.create({
         component: MediaInfoModalComponent,
         componentProps: {
-          // media: data
-          media: {
-            id: media.id,
-            type: media.type,
-            createdAt: media.createdAt,
-            baseColor: media.baseColor,
-            name: media.name,
-            width: media.width,
-            height: media.height,
-            thumbnail: media.thumbnail,
-            fileSize: media.fileSize,
-            // path: media.path,
-            mimeType: media.mimeType,
-          }
+          media: data
         },
         presentingElement: document.querySelector('.ion-page') as any
       });
