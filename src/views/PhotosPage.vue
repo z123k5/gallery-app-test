@@ -92,7 +92,7 @@ import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera
 // import { Media, MediaAsset, MediaSaveOptions } from "@capacitor-community/media";
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import { Media } from '@capacitor-community/media'
-import { CapacitorException } from "@capacitor/core";
+import { Capacitor, CapacitorException } from "@capacitor/core";
 import CryptoJS from 'crypto-js';
 import * as jdenticon from 'jdenticon';
 
@@ -347,15 +347,18 @@ export default {
         try {
           this.medias = []
           const result = await GalleryPlus.getMediaList({
-            limit: 25,
-            thumbnailSize: 1024,
+            type: 'all',
+            thumbnailSize: 200,
             sort: 'oldest',
             includeDetails: true,
+            includeBaseColor: false,
           })
           this.medias = result.media
 
           for (const media of this.medias) {
-            if (!media.thumbnail) {
+            if (media.thumbnail) {
+              media.thumbnail = Capacitor.convertFileSrc(media.thumbnail as string)
+            } else {
               // const { base64 } = await this.readUriAsBlobImage(media.path)
               console.log('media.thumbnail is null: ');
               console.log(media);
