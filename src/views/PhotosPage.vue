@@ -17,14 +17,10 @@
       <ion-searchbar v-if="showSearchBar"></ion-searchbar>
       <br />
 
-      <p>Thumbnails</p>
+      <p> Identicons Generate </p>
       <ion-button @click="MakeMediaData"> Generate 25 Images </ion-button>
 
-      <p> zoom: {{ scale }} </p>
-
-      <div v-if="highQualityPath">
-        <img alt="High Quality" :src="highQualityPath" />
-      </div>
+      <p> Photos & videos </p>
 
       <div id="photo-wall" class="photo-wall">
         <div v-for="media in medias" :key="media.id" class="photo-item" @click="showActionSheet(media)"
@@ -56,7 +52,7 @@
       </ion-fab>
 
       <ion-fab vertical="bottom" horizontal="start" slot="fixed">
-        <ion-fab-button @click="getMedia()">
+        <ion-fab-button>
           <ion-icon :icon="images"></ion-icon>
         </ion-fab-button>
       </ion-fab>
@@ -151,6 +147,7 @@ export default {
     }
   },
   mounted() {
+    this.getMedia();
     const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
       this.isInitComplete = value;
       if (this.isInitComplete === true) {
@@ -347,9 +344,10 @@ export default {
         try {
           this.medias = []
           const result = await GalleryPlus.getMediaList({
+            limit: 200,
             type: 'all',
             thumbnailSize: 200,
-            sort: 'oldest',
+            sort: 'newest',
             includeDetails: true,
             includeBaseColor: false,
           })
