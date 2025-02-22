@@ -27,7 +27,7 @@
       </div>
 
       <div id="photo-wall" class="photo-wall">
-        <div v-for="media in medias" :key="media.id" class="photo-item"
+        <div v-for="media in medias" :key="media.id" class="photo-item" @click="showActionSheet(media)"
           :style="{ backgroundImage: 'url(' + media.thumbnail + ')' }">
           <div v-if="media.type === 'video'"
             style="position: absolute; bottom: 5px; left: 5px; color: white; background-color: rgba(0, 0, 0, 0.5); padding: 2px 5px; border-radius: 3px; font-size: 10px">
@@ -67,7 +67,7 @@
 
 
 <script lang="ts">
-import { camera, videocam, trash, close, images, sync } from 'ionicons/icons';
+import { camera, videocam, images } from 'ionicons/icons';
 import {
   IonPage,
   IonHeader,
@@ -78,42 +78,35 @@ import {
   IonToolbar,
   IonTitle,
   IonContent,
-  IonGrid,
-  IonRow,
-  IonCol,
-  IonImg,
+  // IonGrid,
+  // IonRow,
+  // IonCol,
+  // IonImg,
   IonSearchbar,
   toastController,
-  IonThumbnail,
-  GestureDetail,
+  // IonThumbnail,
+  // GestureDetail,
 } from '@ionic/vue';
-import { ref, reactive, onMounted, onUnmounted, Ref, watch, getCurrentInstance, computed } from 'vue';
+import { ref, getCurrentInstance, computed } from 'vue';
 import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera";
 // import { Media, MediaAsset, MediaSaveOptions } from "@capacitor-community/media";
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import { Media } from '@capacitor-community/media'
-import { Capacitor, CapacitorException } from "@capacitor/core";
-import { createGesture } from '@ionic/vue';
+import { CapacitorException } from "@capacitor/core";
 import CryptoJS from 'crypto-js';
 import * as jdenticon from 'jdenticon';
 
 // Local Database
-import {
-  CapacitorSQLite,
-  SQLiteConnection,
-  SQLiteDBConnection,
-  capSQLiteUpgradeOptions,
-} from '@capacitor-community/sqlite';
-import { MediaDO, UserDO } from '@/components/models';
-import { Filesystem } from '@capacitor/filesystem';
+import { UserDO } from '@/components/models';
+import StorageService from '@/implements/StorageService';
 
 export default {
-  components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonGrid, IonRow, IonCol, IonImg, IonSearchbar, IonThumbnail },
+  components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
   emits: ['onClick'],
   setup() {
     const appInstance = getCurrentInstance();
     const sqliteServ = appInstance?.appContext.config.globalProperties.$sqliteServ;
-    const storageServ = appInstance?.appContext.config.globalProperties.$storageServ;
+    const storageServ : StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
 
     const dbNameRef = ref('');
     const isInitComplete = ref(false);
@@ -161,7 +154,7 @@ export default {
     const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
       this.isInitComplete = value;
       if (this.isInitComplete === true) {
-        const dbUsersName = this.storageServ.getDatabaseName();
+        // const dbUsersName = this.storageServ.getDatabaseName();
         if (this.platform === "web") {
           customElements.whenDefined('jeep-sqlite').then(async () => {
             await this.openDatabase();
@@ -181,8 +174,8 @@ export default {
 
     // 添加触摸手势支持
     // let scale = 1;  // 缩放比例
-    let startDistance = 0;
-    const photoItems = document.querySelectorAll<HTMLElement>('.photo-item');
+    // let startDistance = 0;
+    // const photoItems = document.querySelectorAll<HTMLElement>('.photo-item');
     const photoWall = document.getElementById('photo-wall');
     console.log(photoWall);
     if (photoWall) {
@@ -284,13 +277,8 @@ export default {
         // data: base64 encoded image data
         // 
         const hash = CryptoJS.MD5("key" + i).toString(CryptoJS.enc.Hex);
-        const canvas = this.$refs.identiconCanvas;
 
-        var duration = undefined;
-        if (i > 15)
-          duration = Math.floor(Math.random() * 10) * 1000;
-
-        var thumbnail = this.generateBase64Identicon(hash)
+        const thumbnail = this.generateBase64Identicon(hash)
         this.medias.push({
           id: `fakeid-${i}`,
           type: 'image',
@@ -313,6 +301,7 @@ export default {
     },
     async getMedia() {
       if (this.platform == "android") {
+
         const result = (await Media.getMedias({})).medias;
         // Map MediaAsset[] to MediaItem[]
         this.medias = result.map((result) => {
@@ -328,12 +317,9 @@ export default {
           };
           return mediaItem;
         });
-        toastController.create({
-          message: "Successfully added " + this.medias.length + " media items",
-          duration: 2000,
-        }).then(toast => toast.present());
+
       } else {
-        async function checkPermission() {
+        const checkPermission = async () => {
           const permission = await GalleryPlus.checkPermissions();
 
           if (permission.status !== "granted") {
@@ -354,6 +340,10 @@ export default {
           }
         }
         checkPermission();
+        toastController.create({
+          message: "Requesting Gallery Permission Done.",
+          duration: 300
+        }).then(toast => toast.present());
         try {
           this.medias = []
           const result = await GalleryPlus.getMediaList({
@@ -372,7 +362,10 @@ export default {
               // media.thumbnail = base64
             }
           }
-          console.log(this.medias)
+          toastController.create({
+            message: "medias length: " + this.medias.length,
+            duration: 1000
+          }).then(toast => toast.present());
         } catch (error) {
           toastController.create({
             message: 'Error retrieving media: ' + error,
