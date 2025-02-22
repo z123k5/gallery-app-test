@@ -363,7 +363,8 @@ export default {
             }
           }
           toastController.create({
-            message: "medias length: " + this.medias.length,
+            message: "medias length: " + this.medias.length + " first is " + this.medias[0].thumbnail?.substring(0, 20),
+
             duration: 1000
           }).then(toast => toast.present());
         } catch (error) {
