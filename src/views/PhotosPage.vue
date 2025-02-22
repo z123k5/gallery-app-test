@@ -469,10 +469,10 @@ export default {
 
     async showActionSheet(media: MediaItem) {
       // show toast message media name
-      toastController.create({
-        message: `id: ${media.id}\n <br/>type: ${media.type}\nwidth: ${media.width}\nheight: ${media.height}\nfileSize: ${media.fileSize}\n`,
-        duration: 2000,
-      }).then((toast) => { toast.present(); })
+      // toastController.create({
+      //   message: `id: ${media.id}\n <br/>type: ${media.type}\nwidth: ${media.width}\nheight: ${media.height}\nfileSize: ${media.fileSize}\n`,
+      //   duration: 2000,
+      // }).then((toast) => { toast.present(); })
 
       // const data = await GalleryPlus.getMedia({
       //   id: media.id,

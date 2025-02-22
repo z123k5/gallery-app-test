@@ -58,7 +58,7 @@
 <script lang="ts">
 import { FullMediaItem } from 'capacitor-gallery-plus';
 import { Capacitor } from '@capacitor/core';
-import { modalController } from '@ionic/vue';
+import { modalController, toastController } from '@ionic/vue';
 import { IonButton, IonButtons, IonContent, IonHeader, IonImg, IonItem, IonLabel, IonList, IonTitle, IonToolbar } from '@ionic/vue';
 
 export default {
@@ -83,6 +83,18 @@ export default {
     },
     methods: {
         getMediaSrc(): string {
+            if (!this.media.path) {
+                toastController.create({
+                    message: "media.path is null",
+                    duration: 1000
+                }).then(toast => toast.present());
+                return '';
+
+            } else
+                toastController.create({
+                    message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
+                    duration: 1000
+                }).then(toast => toast.present());
             return this.media.path ? Capacitor.convertFileSrc(this.media.path) : '';
         },
         closeModal() {
