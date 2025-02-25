@@ -1,4 +1,5 @@
 import { ISQLiteService } from './SqliteService';
+import { IStorageService } from './StorageService';
 // import { IStorageService } from '../services/storageService';
 
 export interface IInitializeAppService {
@@ -17,12 +18,12 @@ class InitializeAppService implements IInitializeAppService {
         this.platform = this.sqliteServ.getPlatform();
     }
     async initializeApp(): Promise<boolean> {
+        console.log('initializeApp');
         if (!this.appInit) {
             try {
                 if (this.platform === 'web') {
                     await this.sqliteServ.initWebStore();
                 }
-                // Initialize the myuserdb database
                 await this.storageServ.initializeDatabase();
                 if (this.platform === 'web') {
                     await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName());

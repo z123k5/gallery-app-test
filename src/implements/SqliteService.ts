@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection, capSQLiteUpgradeOptions } from '@capacitor-community/sqlite';
 import { Capacitor } from '@capacitor/core';
 
@@ -10,7 +11,7 @@ export interface ISQLiteService {
     saveToStore(dbName: string): Promise<void>
     saveToLocalDisk(dbName: string): Promise<void>
     isConnection(dbName: string, readOnly: boolean): Promise<boolean>
-};
+}
 
 class SQLiteService implements ISQLiteService {
     platform = Capacitor.getPlatform();
@@ -42,12 +43,12 @@ class SQLiteService implements ISQLiteService {
     async openDatabase(dbName: string, loadToVersion: number,
         readOnly: boolean): Promise<SQLiteDBConnection> {
         this.dbNameVersionDict.set(dbName, loadToVersion);
-        let encrypted = false;
+        const encrypted = false;
         const mode = encrypted ? "secret" : "no-encryption";
         try {
             let db: SQLiteDBConnection;
             const retCC = (await this.sqliteConnection.checkConnectionsConsistency()).result;
-            let isConn = (await this.sqliteConnection.isConnection(dbName, readOnly)).result;
+            const isConn = (await this.sqliteConnection.isConnection(dbName, readOnly)).result;
             if (retCC && isConn) {
                 db = await this.sqliteConnection.retrieveConnection(dbName, readOnly);
             } else {

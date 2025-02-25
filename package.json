@@ -28,9 +28,11 @@
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
     "capacitor-gallery-plus": "^0.1.1",
+    "compressorjs": "^1.2.1",
     "crypto-js": "^4.2.0",
     "ionicons": "^7.0.0",
     "jdenticon": "^3.3.0",
+    "vite-plugin-static-copy": "^2.2.0",
     "vue": "^3.3.0",
     "vue-router": "^4.2.0"
   },

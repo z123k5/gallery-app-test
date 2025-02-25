@@ -40,16 +40,16 @@ import SqliteService from './implements/SqliteService';
 import DbVersionService from './implements/dbVersionService';
 import StorageService from './implements/StorageService';
 import InitializeAppService from './implements/initializeAppService';
+import { JeepSqlite } from 'jeep-sqlite/dist/components/jeep-sqlite';
+import { GalleryEngineService } from './implements/GalleryEngine';
+
 defineCustomElements(window);
+customElements.define("jeep-sqlite", JeepSqlite);
 
 
 const app = createApp(App)
   .use(IonicVue)
   .use(router);
-
-router.isReady().then(() => {
-  app.mount('#app');
-});
 
 export const platform = Capacitor.getPlatform();
 // Set the platform as global properties on the app
@@ -62,5 +62,34 @@ const storageServ = new StorageService(sqliteServ, dbVersionServ);
 app.config.globalProperties.$sqliteServ = sqliteServ;
 app.config.globalProperties.$dbVersionServ = dbVersionServ;
 app.config.globalProperties.$storageServ = storageServ;
+app.config.globalProperties.$galleryEngine = new GalleryEngineService();
 //Define and instantiate the InitializeAppService
 const initAppServ = new InitializeAppService(sqliteServ, storageServ);
+
+const mountApp = () => {
+  router.isReady().then(() => {
+    initAppServ.initializeApp().then((isOk) => {
+      app.mount('#app');
+      if (isOk)
+        console.log('App initialized')
+      else console.log('App initialization failed');
+    }).catch((error) => {
+      console.log(error);
+    })
+  });
+}
+
+if (platform !== "web") {
+  mountApp();
+} else {
+  window.addEventListener('DOMContentLoaded', async () => {
+    const jeepEl = document.createElement("jeep-sqlite");
+    document.body.appendChild(jeepEl);
+    customElements.whenDefined('jeep-sqlite').then(() => {
+      mountApp();
+    })
+      .catch((err) => {
+        console.error('jeep-sqlite creation error:', err);
+      });
+  });
+}

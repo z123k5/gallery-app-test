@@ -14,11 +14,14 @@
       </ion-header>
 
       <!-- 自动隐藏的搜索框 -->
-      <ion-searchbar v-if="showSearchBar"></ion-searchbar>
+      <ion-searchbar :debounce="1000" @ionInput="handleSearch($event)" placeholder="搜索图片"></ion-searchbar>
       <br />
 
       <p> Identicons Generate </p>
       <ion-button @click="MakeMediaData"> Generate 25 Images </ion-button>
+
+      <p> Query All </p>
+      <ion-button @click="QueryAll"> Query All </ion-button>
 
       <p> Photos & videos </p>
 
@@ -89,7 +92,7 @@ import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera
 // import { Media, MediaAsset, MediaSaveOptions } from "@capacitor-community/media";
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import { Media } from '@capacitor-community/media'
-import { Capacitor, CapacitorException } from "@capacitor/core";
+import { Capacitor, CapacitorException, CapacitorCookies } from "@capacitor/core";
 import CryptoJS from 'crypto-js';
 import * as jdenticon from 'jdenticon';
 
@@ -97,21 +100,28 @@ import * as jdenticon from 'jdenticon';
 import { UserDO } from '@/components/models';
 import StorageService from '@/implements/StorageService';
 import MediaInfoModalComponent from '../components/MediaInfoModalComponent.vue';
+import Compressor from 'compressorjs';
+import SQLiteService from '@/implements/SqliteService';
+import { SQLiteDBConnection } from '@capacitor-community/sqlite';
+
+// Plugin tflite cosines calc
+import { GalleryEngineService } from '../implements/GalleryEngine';
 
 export default {
   components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
   emits: ['onClick'],
   setup() {
     const appInstance = getCurrentInstance();
-    const sqliteServ = appInstance?.appContext.config.globalProperties.$sqliteServ;
-    const storageServ : StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
+    const sqliteServ: SQLiteService = appInstance?.appContext.config.globalProperties.$sqliteServ;
+    const storageServ: StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
+    const galleryEngineServ: GalleryEngineService = appInstance?.appContext.config.globalProperties.$galleryEngineServ;
 
     const dbNameRef = ref('');
     const isInitComplete = ref(false);
     const isDatabase = ref(false);
     const users = ref<UserDO[]>([]);
 
-    const db = ref(null);
+    const db = ref<SQLiteDBConnection | null>(null); // Initialize db as null
     const dbInitialized = computed(() => !!db.value);
     const platform = sqliteServ.getPlatform();
 
@@ -138,12 +148,13 @@ export default {
 
     return {
       camera, images, videocam,
-      sqliteServ, storageServ, db, dbInitialized, platform, openDatabase,
+      galleryEngineServ, sqliteServ, storageServ, db, dbInitialized, platform, openDatabase,
       isInitComplete, dbNameRef, isDatabase, users
     }
   },
   mounted() {
     this.getMedia();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
       this.isInitComplete = value;
       if (this.isInitComplete === true) {
@@ -170,7 +181,6 @@ export default {
     // let startDistance = 0;
     // const photoItems = document.querySelectorAll<HTMLElement>('.photo-item');
     const photoWall = document.getElementById('photo-wall');
-    console.log(photoWall);
     if (photoWall) {
       console.log('event ok');
 
@@ -235,13 +245,14 @@ export default {
         }).then((toast) => { toast.present(); })
       });
   },
-  data(): { medias: MediaItem[]; highQualityPath?: string; showSearchBar: boolean, photos: Photo[], scale: number } {
+  data(): { medias: MediaItem[]; highQualityPath?: string; showSearchBar: boolean, photos: Photo[], scale: number, serverUrl: string } {
     return {
       medias: [], // 存储所有媒体
       photos: [],
       highQualityPath: undefined, // 高质量图像路径
       showSearchBar: true,
       scale: 1,
+      serverUrl: 'https://10.12.80.224:8443'
     };
   },
   watch: {
@@ -294,7 +305,6 @@ export default {
     },
     async getMedia() {
       if (this.platform == "android") {
-
         const result = (await Media.getMedias({})).medias;
         // Map MediaAsset[] to MediaItem[]
         this.medias = result.map((result) => {
@@ -372,17 +382,253 @@ export default {
           console.error('Error retrieving media:', error)
         }
       }
+
+      // Async save to database
+      const saveMediaToDatabase = async () => {
+        for (const media of this.medias) {
+          try {
+            if (media.thumbnail) {
+              const base64 = await this.readUriAsBlobImage(media.thumbnail as string)
+              media.thumbnail = base64.base64
+            } else {
+              console.log('media.thumbnail is null: ');
+              console.log(media);
+            }
+            await this.storageServ.addMedia({
+              identifier: media.id,
+              type: media.type,
+              created_at: media.createdAt,
+              name: media.name ?? 'undefined',
+              thumbnail: media.thumbnail ?? 'undefined',
+              processStep: 0,
+              feature: new Blob,
+            })
+          } catch (error) {
+            console.log('Error saving media:', error)
+          }
+        }
+      };
+
+      saveMediaToDatabase(); // TODO : Uncomment
+      // Async upload to server and fetch calculate results to db
+      const uploadAndFetchCalculateResults = async () => {
+        // Get token from cookie
+        let token = this.getCookie('token');
+
+        if (token === null) {
+          token = await this.performLogin();
+        } else {
+          // check token
+          fetch(`${this.serverUrl}/users/active`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          }).then(response => {
+            if (response.status === 401) {
+              // Token is invalid, perform login
+              this.performLogin().then(token => {
+                if (token !== null) {
+                  this.setCookie('token', token);
+                } else {
+                  toastController.create({
+                    message: 'Login failed',
+                    duration: 2000,
+                  }).then((toast) => { toast.present(); })
+                }
+              });
+            }
+          }).catch(error => {
+            console.log(error);
+          });
+        }
+
+        // 逐个上传文件
+        for (const media of this.medias) {
+          const formData = new FormData();
+          try {
+            const fullMedia = await GalleryPlus.getMedia({ id: media.id, includePath: true, includeBaseColor: false, includeDetails: false });
+            const response = await fetch(fullMedia.path ?? "");
+            const blob = await response.blob();
+
+            // 压缩文件
+            new Compressor(blob, {
+              quality: 0.8,
+              maxWidth: 640,
+              maxHeight: 480,
+              convertTypes: ['image/jpeg'],
+              success: async (result) => {
+                formData.append("files", result, media.id);
+
+                console.log('FormData:', formData);
+                await fetch(this.serverUrl + '/engine/resolve', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': 'Bearer ' + token,
+                  },
+                  body: formData
+                }).then((response: Response) => {
+                  if (response.ok) {
+                    console.log(`fetch response: ${response.status}`);
+                    // 检查 Content-Type
+                    const contentType = response.headers.get('Content-Type');
+
+                    if (contentType === 'application/octet-stream') {
+                      // 解析响应为 Blob
+                      response.blob().then(async (blob) => {
+                        console.log(`Received binary data, size: ${blob.size}`);
+                        // 假设服务器返回的二进制数据是一个文件，我们将其保存到数据库
+                        try {
+                          await this.storageServ.updateMediaByIdentifier(media.id, 2, blob);
+                          console.log('updateMediaByIdentifier success');
+                        } catch (error) {
+                          console.error('Failed to save result to database:', error);
+                        }
+
+                        // 在所有数据处理完毕后统一保存到数据库
+                        try {
+                          await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName());
+                          await this.sqliteServ.saveToLocalDisk(this.storageServ.getDatabaseName());
+                          console.log('All data saved successfully');
+                        } catch (error) {
+                          console.error('Failed to save all data to database:', error);
+                        }
+                      }).catch((error) => {
+                        console.error('Error parsing response as Blob:', error);
+                      });
+                    } else if (contentType === 'application/json') {
+                      // 如果是 JSON 数据，解析为 JSON
+                      response.json().then(async (data) => {
+                        for (const [key, value] of Object.entries(data)) {
+                          console.log(key, value);
+                          if (value instanceof Blob) {
+                            console.log(`Update file, size: ${value.size}`);
+                            try {
+                              await this.storageServ.updateMediaByIdentifier(key, 2, value);
+                              console.log('updateMediaByIdentifier success');
+                            } catch (error) {
+                              console.error('Failed to save result to database:', error);
+                              continue;
+                            }
+                          }
+                        }
+
+                        // 在所有数据处理完毕后统一保存到数据库
+                        try {
+                          await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName());
+                          await this.sqliteServ.saveToLocalDisk(this.storageServ.getDatabaseName());
+                          console.log('All data saved successfully');
+                        } catch (error) {
+                          console.error('Failed to save all data to database:', error);
+                        }
+                      }).catch((error) => {
+                        console.error('Error parsing response as JSON:', error);
+                      });
+                    } else {
+                      console.error('Unsupported Content-Type:', contentType);
+                    }
+                  } else {
+                    console.error('Error uploading media:', response.statusText);
+                    // 如果需要，可以在这里处理具体的错误码
+                    if (response.status === 400) {
+                      response.json().then(data => {
+                        console.error('Server validation errors:', data);
+                      });
+                    }
+                  }
+                }).catch(error => {
+                  console.error('Network error:', error);
+                });
+              },
+              error: (err) => {
+                console.error(`Error compressing file ${media.name}:`, err.message);
+              },
+            });
+          } catch (err: any) {
+            console.error(`Error fetching file ${media.name}:`, err.message);
+          }
+        }
+      };
+
+      uploadAndFetchCalculateResults();
     },
+
+    async QueryAll() {
+      const result = await this.storageServ.getMedias();
+      console.log(result);
+      toastController.create({
+        message: 'Query all media: ' + this.medias.length,
+        duration: 2000,
+      }).then((toast) => { toast.present(); })
+    },
+
+    /**
+     * Browser
+     */
+    getCookies() {
+      return document.cookie;
+    },
+    getCookie(key: string) {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith(key + '=')) {
+          return cookie.substring(key.length + 1);
+        }
+      }
+      return null;
+    },
+    setCookie(key: string, value: string) {
+      document.cookie = key + '=' + value;
+    },
+    async deleteCookie(key: string) {
+      const url = this.serverUrl;
+      await CapacitorCookies.deleteCookie({
+        url: url,
+        key: key
+      });
+    },
+    // zoomIn() {
+    //   this.scale += 1.5;
+    //   if (this.scale > 3) {
+    //     this.scale = 3;  // 限制最大放大比例
+    //   }
+    // },
+
+    // zoomOut() {
+    //   this.scale -= 1.5;
+    //   if (this.scale < 1) {
+    //     this.scale = 1;  // 限制最大放大比例
+    //   }
+    // },
 
     /**
      * Actions
      */
+    async performLogin(): Promise<string> {
+      try {
+        const formData = new URLSearchParams();
+        formData.append('username', 'admin');
+        formData.append('password', 'admin');
+        const response = await fetch(this.serverUrl + '/users/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData
+        });
+        const data = await response.json();
+        return data.access_token;
+      } catch (error) {
+        console.error('Error:', error);
+        return '';
+      }
+    },
 
     async readUriAsBlobImage(uri: string) {
       if (!uri) {
         return { base64: '', width: 0, height: 0 };
       }
-      const response = await fetch(uri);
+      const response = await fetch(uri)
       const blob = await response.blob();
 
       return new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
@@ -467,6 +713,65 @@ export default {
       }
     },
 
+    handleSearch(event: any) {
+      console.log(event)
+      // 1. fetch server /engine/query
+      // 2. get feature from server
+      // 3. calculate the cosine similarity
+      // 4. show the result
+
+      // /users/active
+      fetch(`${this.serverUrl}/users/active`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.getCookie('token')}`,
+        },
+      }).then(response => {
+        if (response.status === 401) {
+          // Token is invalid, perform login
+          this.performLogin().then(token => {
+            if (token !== null) {
+              this.setCookie('token', token);
+            } else {
+              toastController.create({
+                message: 'Login failed',
+                duration: 2000,
+              }).then((toast) => { toast.present(); })
+            }
+          });
+        }
+      }).catch(error => {
+        console.log(error);
+      });
+
+      try {
+        fetch(`${this.serverUrl}/engine/query`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getCookie('token'),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify({
+            query: event.target.value,
+          }),
+        }).then(async (response) => {
+          const contentType = response.headers.get('Content-Type');
+
+          if (contentType === 'application/octet-stream') {
+            // 解析响应为 Blob
+            response.blob().then(async (blob) => {
+              // Do search
+              this.galleryEngineServ.loadTensorFromBytes(await blob.arrayBuffer());
+            })
+          }
+        });
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    },
+
     async showActionSheet(media: MediaItem) {
       // show toast message media name
       // toastController.create({
@@ -478,7 +783,7 @@ export default {
         id: media.id,
         includeBaseColor: true,
         includeDetails: true,
-        includePath: true
+        includePath: true,
       });
 
       const modal = await modalController.create({
@@ -498,24 +803,7 @@ export default {
       //     this.showSearchBar = true;
       //   }
       // }
-    },
-
-    /**
-     * UI
-     */
-    // zoomIn() {
-    //   this.scale += 1.5;
-    //   if (this.scale > 3) {
-    //     this.scale = 3;  // 限制最大放大比例
-    //   }
-    // },
-
-    // zoomOut() {
-    //   this.scale -= 1.5;
-    //   if (this.scale < 1) {
-    //     this.scale = 1;  // 限制最大放大比例
-    //   }
-    // },
+    }
   }
 };
 

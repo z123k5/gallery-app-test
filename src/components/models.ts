@@ -12,5 +12,7 @@ export interface MediaDO {
     type: string;
     created_at: number;
     thumbnail: string;
+    feature: Blob; // Feature
     processStep: number; // Process Step, 0: Not Processed, 1: Uploaded, 2: calculated
+
 }

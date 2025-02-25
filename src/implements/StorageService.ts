@@ -15,12 +15,12 @@ export interface IStorageService {
     deleteUserById(id: string): Promise<void>
     getDatabaseName(): string
     getDatabaseVersion(): number
-};
+}
 class StorageService implements IStorageService {
     versionUpgrades = UserUpgradeStatements;
     loadToVersion = UserUpgradeStatements[UserUpgradeStatements.length - 1].toVersion;
     db!: SQLiteDBConnection;
-    database: string = 'myuserdb';
+    database: string = 'media';
     sqliteServ!: ISQLiteService;
     dbVerServ!: IDbVersionService;
     isInitCompleted = new BehaviorSubject(false);
@@ -44,10 +44,20 @@ class StorageService implements IStorageService {
                 upgrade: this.versionUpgrades
             });
             this.db = await this.sqliteServ.openDatabase(this.database, this.loadToVersion, false);
-            const isData = await this.db.query("select * from sqlite_sequence");
+            const isData = await this.db.query("SELECT name FROM sqlite_master WHERE type='table' AND name='media' COLLATE NOCASE");
             if (isData.values!.length === 0) {
-                // create database initial users if any
-
+                // create table
+                try {
+                    UserUpgradeStatements[UserUpgradeStatements.length - 1].statements.forEach(async sql => {
+                        this.db
+                        await this.db.execute(sql);
+                    });
+                    this.sqliteServ.saveToStore(this.database);
+                    console.log('initializeApp: create table');
+                } catch (error: any) {
+                    await this.db.execute("ROLLBACK");
+                    console.log('initializeApp: create table error');
+                }
             }
 
             this.dbVerServ.setDbVersion(this.database, this.loadToVersion);
@@ -83,14 +93,15 @@ class StorageService implements IStorageService {
     }
 
     async getMedias(): Promise<MediaDO[]> {
-        return (await this.db.query('SELECT * FROM medias;')).values as MediaDO[];
+        return (await this.db.query('SELECT * FROM media;')).values as MediaDO[];
     }
 
     async addMedia(media: MediaDO): Promise<number> {
-        const sql = `INSERT INTO medias (identidier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
+        const sql = `INSERT INTO media (identifier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
         const res = await this.db.run(sql, [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]);
         if (res.changes !== undefined
             && res.changes.lastId !== undefined && res.changes.lastId > 0) {
+                console.log(`sqliteService.addMedia: ${media.identifier}`);
             return res.changes.lastId;
         } else {
             throw new Error(`storageService.addMedia: lastId not returned`);
@@ -99,26 +110,52 @@ class StorageService implements IStorageService {
 
     async addManyMedias(medias: MediaDO[]): Promise<void> {
         try {
-            const sql = `INSERT INTO medias (identidier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
+            const sql = `INSERT INTO media (identifier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
             await this.db.run(sql, medias.map(media => [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]));
+            console.log(`sqliteService.addManyMedias: ${medias.length}`);
         } catch (error: any) {
             const msg = error.message ? error.message : error;
             throw new Error(`storageService.addManyMedias: ${msg}`);
         }
     }
-    async updateMediaByIentifier(identifier: string, processStep: number): Promise<void> {
-        const sql = `UPDATE medias SET processStep=${processStep} WHERE identifier=${identifier}`;
-        await this.db.run(sql);
+    async updateMediaByIdentifier(identifier: string, processStep: number, feature: Blob | null = null): Promise<void> {
+    let sql: string;
+    let params: any[];
+
+    if (processStep === 2) {
+        if (feature) {
+            // Convert Blob to ArrayBuffer
+            const arrayBuffer = await feature.arrayBuffer();
+            // Convert ArrayBuffer to Uint8Array
+            const uint8Array = new Uint8Array(arrayBuffer);
+            sql = `UPDATE media SET processStep = ?, feature = ? WHERE identifier = ?`;
+            params = [processStep, uint8Array, identifier];
+        } else {
+            sql = `UPDATE media SET processStep = ? WHERE identifier = ?`;
+            params = [processStep, identifier];
+        }
+    } else {
+        sql = `UPDATE media SET processStep = ? WHERE identifier = ?`;
+        params = [processStep, identifier];
     }
 
+    try {
+        await this.db.run(sql, params);
+        console.log(`storageService.updateMediaByIdentifier: ${sql}`);
+    } catch (error: any) {
+        console.error(`Error updating media by identifier: ${error.message}`);
+        throw new Error(`storageService.updateMediaByIdentifier: ${error.message}`);
+    }
+}
+
     async deleteMediaByIdentifier(identifier: string): Promise<void> {
-        const sql = `DELETE FROM medias WHERE identifier=${identifier}`;
+        const sql = `DELETE FROM media WHERE identifier=${identifier}`;
         await this.db.run(sql);
     }
 
     async deleteMediaByManyIdentifier(identifiers: string[]) {
         try {
-            const sql = `DELETE FROM medias WHERE identifier IN (${identifiers.join(',')})`;
+            const sql = `DELETE FROM media WHERE identifier IN (${identifiers.join(',')})`;
             await this.db.run(sql);
         }
         catch (error: any) {
@@ -153,7 +190,8 @@ class StorageService implements IStorageService {
                     type: media.type,
                     created_at: media.createdAt,
                     thumbnail: "",
-                    processStep: 0
+                    processStep: 0,
+                    feature: new Blob(),
                 }
             })
             await this.addManyMedias(mediasToAdd);

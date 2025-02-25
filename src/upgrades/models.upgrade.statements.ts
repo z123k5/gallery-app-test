@@ -3,21 +3,20 @@ export const UserUpgradeStatements = [
         toVersion: 1,
         statements: [
             `CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        identifier INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         email TEXT NOT NULL UNIQUE,
         active INTEGER DEFAULT 1,
         token_expire DATETIME DEFAULT CURRENT_TIMESTAMP
-        );`,
-            `CREATE TABLE IF NOT EXISTS media (
-        id string PRIMARY KEY,
+        );
+        CREATE TABLE IF NOT EXISTS media (
+        identifier string PRIMARY KEY,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         thumbnail TEXT,
-        processStep INTEGER DEFAULT 0
-        feature_vector INTEGER DEFAULT 0
-            )
+        processStep INTEGER DEFAULT 0,
+        feature BLOB DEFAULT 0
         );` 
         ]
     },

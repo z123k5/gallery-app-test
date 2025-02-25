@@ -95,7 +95,7 @@ export default {
                     message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
                     duration: 1000
                 }).then(toast => toast.present());
-            return this.media.path ? Capacitor.convertFileSrc(this.media.path) : '';
+            return Capacitor.convertFileSrc(this.media.path);
         },
         closeModal() {
             modalController.dismiss();
