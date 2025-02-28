@@ -30,6 +30,11 @@ const config: CapacitorConfig = {
     "CapacitorCookies": {
       "enabled": true
     }
+  },
+  server: {
+    url: 'https://localhost',
+    cleartext: true, // 如果需要使用 HTTP 请求
+    allowNavigation: ['localhost', '10.12.80.224'] // 允许导航的域名
   }
 };
 

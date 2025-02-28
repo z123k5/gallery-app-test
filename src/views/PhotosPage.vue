@@ -14,7 +14,7 @@
       </ion-header>
 
       <!-- 自动隐藏的搜索框 -->
-      <ion-searchbar :debounce="1000" @ionInput="handleSearch($event)" placeholder="搜索图片"></ion-searchbar>
+      <ion-searchbar :debounce="1000" @keyup.enter="handleSearch($event)" placeholder="搜索图片"></ion-searchbar>
       <br />
 
       <p> Identicons Generate </p>
@@ -89,7 +89,6 @@ import {
 } from '@ionic/vue';
 import { ref, getCurrentInstance, computed } from 'vue';
 import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera";
-// import { Media, MediaAsset, MediaSaveOptions } from "@capacitor-community/media";
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import { Media } from '@capacitor-community/media'
 import { Capacitor, CapacitorException, CapacitorCookies } from "@capacitor/core";
@@ -108,6 +107,7 @@ import { SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { GalleryEngineService } from '../implements/GalleryEngine';
 
 export default {
+  name: 'PhotosPage',
   components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
   emits: ['onClick'],
   setup() {
@@ -461,7 +461,6 @@ export default {
               success: async (result) => {
                 formData.append("files", result, media.id);
 
-                console.log('FormData:', formData);
                 await fetch(this.serverUrl + '/engine/resolve', {
                   method: 'POST',
                   headers: {
@@ -713,15 +712,14 @@ export default {
       }
     },
 
-    handleSearch(event: any) {
-      console.log(event)
+    async handleSearch(event: any) {
       // 1. fetch server /engine/query
       // 2. get feature from server
       // 3. calculate the cosine similarity
       // 4. show the result
 
       // /users/active
-      fetch(`${this.serverUrl}/users/active`, {
+      await fetch(`${this.serverUrl}/users/active`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -746,25 +744,20 @@ export default {
       });
 
       try {
-        fetch(`${this.serverUrl}/engine/query`, {
-          method: 'POST',
+        await fetch(`${this.serverUrl}/engine/query?query=${encodeURIComponent(event.target.value)}`, {
+          method: 'GET',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ' + this.getCookie('token'),
             'X-Requested-With': 'XMLHttpRequest',
           },
-          body: JSON.stringify({
-            query: event.target.value,
-          }),
         }).then(async (response) => {
           const contentType = response.headers.get('Content-Type');
-
           if (contentType === 'application/octet-stream') {
-            // 解析响应为 Blob
             response.blob().then(async (blob) => {
-              // Do search
+              console.log(blob);
               this.galleryEngineServ.loadTensorFromBytes(await blob.arrayBuffer());
-            })
+            });
           }
         });
       } catch (error) {
