@@ -14,7 +14,8 @@
       </ion-header>
 
       <!-- 自动隐藏的搜索框 -->
-      <ion-searchbar :debounce="1000" :value="queryString" @keyup.enter="handleSearch($event)" placeholder="搜索图片"></ion-searchbar>
+      <ion-searchbar :debounce="1000" :value="queryString" @keyup.enter="handleSearch($event)"
+        placeholder="搜索图片"></ion-searchbar>
       <br />
 
       <p> Identicons Generate </p>
@@ -474,11 +475,11 @@ export default {
             // 压缩文件
             new Compressor(blob, {
               quality: 0.8,
-              maxWidth: 200,
-              maxHeight: 200,
+              maxWidth: 800,
+              maxHeight: 800,
               convertTypes: ['image/jpeg'],
               success: async (result) => {
-                formData.append("files", result, media.id);
+                formData.append("file", result, "image.png");
 
                 await fetch(this.serverUrl + '/engine/resolve', {
                   method: 'POST',
@@ -486,66 +487,32 @@ export default {
                     'Authorization': 'Bearer ' + token,
                   },
                   body: formData
-                }).then((response: Response) => {
+                }).then(async (response: Response) => {
                   if (response.ok) {
-                    // 检查 Content-Type
-                    const contentType = response.headers.get('Content-Type');
-
-                    if (contentType === 'application/octet-stream') {
-                      // 解析响应为 Blob
-                      response.arrayBuffer().then(async (arrayBuffer) => {
-                        console.log(`Received binary data, size: ${blob.size}`);
-                        // 假设服务器返回的二进制数据是一个文件，我们将其保存到数据库
-                        try {
-                          await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
-                          console.log('updateMediaByIdentifier success');
-                        } catch (error) {
-                          console.error('Failed to save result to database:', error);
-                        }
-
-                        // 在所有数据处理完毕后统一保存到数据库
-                        try {
-                          // await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName()); // TODO: delete
-                          await this.sqliteServ.saveToLocalDisk(this.storageServ.getDatabaseName());
-                          console.log('All data saved successfully');
-                        } catch (error) {
-                          console.error('Failed to save all data to database:', error);
-                        }
-                      }).catch((error) => {
-                        console.error('Error parsing response as Blob:', error);
-                      });
-                    } else if (contentType === 'application/json') {
-                      // 如果是 JSON 数据，解析为 JSON
-                      response.json().then(async (data) => {
-                        for (const [key, value] of Object.entries(data)) {
-                          console.log(key, value);
-                          if (value instanceof ArrayBuffer) {
-                            console.log(`Update file, size: ${value.byteLength}`);
-                            try {
-                              await this.storageServ.updateMediaByIdentifier(key, 2, value);
-                              this.databaseTensorShouldBeReload = true;
-                              console.log('updateMediaByIdentifier success');
-                            } catch (error) {
-                              console.error('Failed to save result to database:', error);
-                              continue;
-                            }
-                          }
-                        }
-
-                        // 在所有数据处理完毕后统一保存到数据库
-                        try {
-                          // await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName()); //TODO: delete
-                          await this.sqliteServ.saveToLocalDisk(this.storageServ.getDatabaseName());
-                          console.log('All data saved successfully');
-                        } catch (error) {
-                          console.error('Failed to save all data to database:', error);
-                        }
-                      }).catch((error) => {
-                        console.error('Error parsing response as JSON:', error);
-                      });
-                    } else {
-                      console.error('Unsupported Content-Type:', contentType);
+                    const encoded_data = (await response.json())["feat"]
+                    const decodedData = atob(encoded_data);
+                    const arrayBuffer = new ArrayBuffer(decodedData.length);
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    // 将二进制数据填充到 Uint8Array
+                    for (let i = 0; i < decodedData.length; i++) {
+                      uint8Array[i] = decodedData.charCodeAt(i);
                     }
+                    try {
+                      await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
+                      console.log('updateMediaByIdentifier success');
+                    } catch (error) {
+                      console.error('Failed to save result to database:', error);
+                    }
+
+                    // 在所有数据处理完毕后统一保存到数据库
+                    try {
+                      // await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName()); // TODO: delete
+                      await this.sqliteServ.saveToLocalDisk(this.storageServ.getDatabaseName());
+                      console.log('All data saved successfully');
+                    } catch (error) {
+                      console.error('Failed to save all data to database:', error);
+                    }
+
                   } else {
                     console.error('Error uploading media:', response.statusText);
                     // 如果需要，可以在这里处理具体的错误码
@@ -987,7 +954,7 @@ export default {
             console.log(probWithIndex);
             this.searchMedias = [];
             const right = Math.min(5, probWithIndex.length);
-            probWithIndex.slice(0,right).forEach((item) => {
+            probWithIndex.slice(0, right).forEach((item) => {
               this.searchMedias.push(this.medias[item.index]);
             });
 
