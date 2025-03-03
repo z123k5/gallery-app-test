@@ -47,3 +47,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
 }
+
+class CustomSessionDelegate: NSObject, URLSessionDelegate {
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        guard let certPath = Bundle.main.path(forResource: "my_cert", ofType: "cer"),
+              let certData = try? Data(contentsOf: URL(fileURLWithPath: certPath)) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        let localCert = SecCertificateCreateWithData(nil, certData as CFData)
+        let serverTrust = challenge.protectionSpace.serverTrust
+        let serverCert = SecTrustGetCertificateAtIndex(serverTrust!, 0)
+
+        if localCert == serverCert {
+            let credential = URLCredential(trust: serverTrust!)
+            completionHandler(.useCredential, credential)
+        } else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+        }
+    }
+}
