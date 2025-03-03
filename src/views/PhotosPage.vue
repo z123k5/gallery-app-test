@@ -464,8 +464,10 @@ export default {
 
           } else {
             const fullMedia = await GalleryPlus.getMedia({ id: media.id, includePath: true, includeBaseColor: false, includeDetails: false });
-            
-            const response = await fetch(Capacitor.convertFileSrc(fullMedia.path?? ""));
+
+            const mediaWebSrc = Capacitor.convertFileSrc(fullMedia.path ?? "")
+            console.log(mediaWebSrc);
+            const response = await fetch(mediaWebSrc);
             blob = await response.blob();
 
             // 压缩文件
@@ -688,13 +690,16 @@ export default {
             type: 'all',
             thumbnailSize: 200,
             sort: 'newest',
-            includeDetails: true,
+            includeDetails: true, // TODO: edit
             includeBaseColor: false,
           })
           this.medias = result.media
 
 
           for (const media of this.medias) {
+            if (media.name === undefined) {
+              media.name = media.id;
+            }
             if (media.thumbnail) {
               media.thumbnail = Capacitor.convertFileSrc(media.thumbnail as string)
             } else {
