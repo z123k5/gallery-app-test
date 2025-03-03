@@ -50,7 +50,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 class CustomSessionDelegate: NSObject, URLSessionDelegate {
     func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        guard let certPath = Bundle.main.path(forResource: "my_cert", ofType: "cer"),
+        guard let certPath = Bundle.main.path(forResource: "ca", ofType: "cer"),
               let certData = try? Data(contentsOf: URL(fileURLWithPath: certPath)) else {
             completionHandler(.cancelAuthenticationChallenge, nil)
             return
