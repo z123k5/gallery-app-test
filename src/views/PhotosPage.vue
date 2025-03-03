@@ -464,7 +464,8 @@ export default {
 
           } else {
             const fullMedia = await GalleryPlus.getMedia({ id: media.id, includePath: true, includeBaseColor: false, includeDetails: false });
-            const response = await fetch(fullMedia.path ?? "");
+            
+            const response = await fetch(Capacitor.convertFileSrc(fullMedia.path?? ""));
             blob = await response.blob();
 
             // 压缩文件

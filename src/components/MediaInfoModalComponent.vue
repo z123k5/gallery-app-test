@@ -91,10 +91,10 @@ export default {
                 return '';
 
             } else
-                toastController.create({
-                    message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
-                    duration: 1000
-                }).then(toast => toast.present());
+                // toastController.create({
+                //     message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
+                //     duration: 1000
+                // }).then(toast => toast.present());
             return Capacitor.convertFileSrc(this.media.path);
         },
         closeModal() {
