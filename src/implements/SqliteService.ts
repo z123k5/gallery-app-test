@@ -93,6 +93,12 @@ class SQLiteService implements ISQLiteService {
             throw new Error(`sqliteService.closeDatabase: ${msg}`);
         }
     }
+    
+    /**
+     * 
+     * @param dbName Only for Web platform
+     * @returns void
+     */
     async saveToStore(dbName: string): Promise<void> {
         try {
             await this.sqliteConnection.saveToStore(dbName);

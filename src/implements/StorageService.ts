@@ -6,6 +6,7 @@ import { SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { UserUpgradeStatements } from '../upgrades/models.upgrade.statements';
 import { MediaDO, UserDO } from '../components/models';
 import { MediaItem } from 'capacitor-gallery-plus'
+import { Buffer } from 'buffer';
 
 export interface IStorageService {
     initializeDatabase(): Promise<void>
@@ -52,7 +53,7 @@ class StorageService implements IStorageService {
                         this.db
                         await this.db.execute(sql);
                     });
-                    this.sqliteServ.saveToStore(this.database);
+                    // this.sqliteServ.saveToStore(this.database);
                     console.log('initializeApp: create table');
                 } catch (error: any) {
                     await this.db.execute("ROLLBACK");
@@ -84,12 +85,20 @@ class StorageService implements IStorageService {
         }
     }
     async updateUserById(id: string, active: number): Promise<void> {
-        const sql = `UPDATE users SET active=${active} WHERE id=${id}`;
-        await this.db.run(sql);
+        const sql = `UPDATE users SET active = ? WHERE id = ?;`;
+        const params = [active, id];
+        await this.db.run(sql, params);
     }
     async deleteUserById(id: string): Promise<void> {
         const sql = `DELETE FROM users WHERE id=${id}`;
         await this.db.run(sql);
+    }
+
+    async getMediaProcessStepByIndentifier(identifier: string): Promise<number | undefined> {
+        const sql = `SELECT processStep FROM media WHERE identifier = ?;`;
+        const params = [identifier];
+        const res = await this.db.query(sql, params);
+        return res.values![0].processStep;
     }
 
     async getMedias(): Promise<MediaDO[]> {
@@ -101,7 +110,7 @@ class StorageService implements IStorageService {
         const res = await this.db.run(sql, [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]);
         if (res.changes !== undefined
             && res.changes.lastId !== undefined && res.changes.lastId > 0) {
-                console.log(`sqliteService.addMedia: ${media.identifier}`);
+            console.log(`sqliteService.addMedia: ${media.identifier}`);
             return res.changes.lastId;
         } else {
             throw new Error(`storageService.addMedia: lastId not returned`);
@@ -118,83 +127,91 @@ class StorageService implements IStorageService {
             throw new Error(`storageService.addManyMedias: ${msg}`);
         }
     }
-    async updateMediaByIdentifier(identifier: string, processStep: number, feature: Blob | null = null): Promise<void> {
-    let sql: string;
-    let params: any[];
+    async updateMediaByIdentifier(identifier: string, processStep: number, arrayBuffer: ArrayBuffer | null = null): Promise<void> {
+        let sql: string;
+        let params: any[];
 
-    if (processStep === 2) {
-        if (feature) {
-            // Convert Blob to ArrayBuffer
-            const arrayBuffer = await feature.arrayBuffer();
-            // Convert ArrayBuffer to Uint8Array
-            const uint8Array = new Uint8Array(arrayBuffer);
-            sql = `UPDATE media SET processStep = ?, feature = ? WHERE identifier = ?`;
-            params = [processStep, uint8Array, identifier];
+        if (processStep === 2) {
+            if (arrayBuffer) {
+                // Convert Blob to ArrayBuffer
+                const buffer = Buffer.from(arrayBuffer);
+                sql = `UPDATE media SET processStep = ?, feature = ? WHERE identifier = ?`;
+                // TODO: Pull Request for android: Not supported for Buffer
+                params = [processStep, buffer, identifier];
+            } else {
+                sql = `UPDATE media SET processStep = ? WHERE identifier = ?`;
+                params = [processStep, identifier];
+            }
         } else {
             sql = `UPDATE media SET processStep = ? WHERE identifier = ?`;
             params = [processStep, identifier];
         }
-    } else {
-        sql = `UPDATE media SET processStep = ? WHERE identifier = ?`;
-        params = [processStep, identifier];
-    }
 
-    try {
-        await this.db.run(sql, params);
-        console.log(`storageService.updateMediaByIdentifier: ${sql}`);
-    } catch (error: any) {
-        console.error(`Error updating media by identifier: ${error.message}`);
-        throw new Error(`storageService.updateMediaByIdentifier: ${error.message}`);
+        try {
+            await this.db.run(sql, params);
+            console.log(`storageService.updateMediaByIdentifier: ${sql}`);
+        } catch (error: any) {
+            console.error(`KKError updating media by identifier: ${error.message}`);
+            throw new Error(`storageService.updateMediaByIdentifier: ${error.message}`);
+        }
     }
-}
 
     async deleteMediaByIdentifier(identifier: string): Promise<void> {
-        const sql = `DELETE FROM media WHERE identifier=${identifier}`;
-        await this.db.run(sql);
+        const sql = `DELETE FROM media WHERE identifier = ?`;
+        const params = [identifier];
+        await this.db.run(sql, params);
     }
 
-    async deleteMediaByManyIdentifier(identifiers: string[]) {
-        try {
-            const sql = `DELETE FROM media WHERE identifier IN (${identifiers.join(',')})`;
-            await this.db.run(sql);
+    async deleteMediaByManyIdentifier(identifiers: string[]): Promise<void> {
+        if (identifiers.length === 0) {
+            return; // 如果 identifiers 为空，直接返回
         }
-        catch (error: any) {
+
+        try {
+            const batchSize = 999; // 根据数据库限制设置批次大小
+            for (let i = 0; i < identifiers.length; i += batchSize) {
+                const batchIdentifiers = identifiers.slice(i, i + batchSize);
+                const placeholders = batchIdentifiers.map(() => '?').join(',');
+                const sql = `DELETE FROM media WHERE identifier IN (${placeholders})`;
+                await this.db.run(sql, batchIdentifiers);
+            }
+        } catch (error: any) {
             const msg = error.message ? error.message : error;
             throw new Error(`storageService.deleteMediaByManyIdentifier: ${msg}`);
         }
     }
 
     async autoAddOrDeleteMedia(medias: MediaItem[]): Promise<void> {
-            // 取数据库中行与medias公共的交集
-            // 先删去数据库中的行，再添加medias中不存在的行
-            const mediasInDb = await this.getMedias();
+        // 取数据库中行与medias公共的交集
+        // 先删去数据库中的行，再添加medias中不存在的行
+        const mediasInDb = await this.getMedias();
 
-            // 求数据库中待删的identifier集合
-            const mediasIdsInDb = new Set(mediasInDb.map(media => media.identifier));
-            const mediasIdsInArg = new Set(medias.map(media => media.id));
+        // 求数据库中待删的identifier集合
+        const mediasIdsInDb = new Set(mediasInDb.map(media => media.identifier));
+        const mediasIdsInArg = new Set(medias.map(media => media.id));
 
-            const mediasIdsInDbToDelete = new Set(mediasIdsInDb.difference(mediasIdsInArg));
-            const mediasIdsInDbToAdd = new Set(mediasIdsInArg.difference(mediasIdsInDb));
+        const mediasIdsInDbToDelete = new Set(mediasIdsInDb.difference(mediasIdsInArg));
+        const mediasIdsInDbToAdd = new Set(mediasIdsInArg.difference(mediasIdsInDb));
 
-            await this.deleteMediaByManyIdentifier([...mediasIdsInDbToDelete]);
-            // 将mediasIdsInDbToAdd映射到medias的MediaAsset[]类型中构造一个新的数组，然后转为MediaDO[]
-            const mediasToAdd = [...mediasIdsInDbToAdd].map((id: string): MediaDO => {
-                const media = medias.find(media => media.id === id);
-                if (media === undefined) {
-                    throw new Error(`storageService.autoAddOrDeleteMedia: media not found`);
-                }
-                // MediaDO
-                return {
-                    identifier: media.id,
-                    name: media.name ?? '',
-                    type: media.type,
-                    created_at: media.createdAt,
-                    thumbnail: "",
-                    processStep: 0,
-                    feature: new Blob(),
-                }
-            })
-            await this.addManyMedias(mediasToAdd);
+        await this.deleteMediaByManyIdentifier([...mediasIdsInDbToDelete]);
+        // 将mediasIdsInDbToAdd映射到medias的MediaAsset[]类型中构造一个新的数组，然后转为MediaDO[]
+        const mediasToAdd = [...mediasIdsInDbToAdd].map((id: string): MediaDO => {
+            const media = medias.find(media => media.id === id);
+            if (media === undefined) {
+                throw new Error(`storageService.autoAddOrDeleteMedia: media not found`);
+            }
+            // MediaDO
+            return {
+                identifier: media.id,
+                name: media.name ?? '',
+                type: media.type,
+                created_at: media.createdAt,
+                thumbnail: "",
+                processStep: 0,
+                feature: new Blob(),
+            }
+        })
+        await this.addManyMedias(mediasToAdd);
     }
 }
 export default StorageService;

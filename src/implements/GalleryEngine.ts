@@ -1,31 +1,22 @@
-import { registerPlugin } from '@capacitor/core';
+import { GalleryEngine } from "capacitor-plugin-tflite-cosines-calc"
 
-const GalleryEngine = registerPlugin('GalleryEngine');
 
 class GalleryEngineService {
-    async loadTensorFromBytes(tensorBytes: ArrayBuffer): Promise<void> {
-        try {
-            const base64Tensor = this.arrayBufferToBase64(tensorBytes);
-            await GalleryEngine.loadTensorFromBytes({ tensorBytes: base64Tensor });
-            console.log('Tensor loaded successfully');
-        } catch (error) {
-            console.error('Error loading tensor:', error);
-        }
+    static async echo(value: string): Promise<string> {
+        const result = GalleryEngine.echo({ value });
+        return (await result).value;
+    }
+    static async loadTensorFromDB(): Promise<void> {
+        await GalleryEngine.loadTensorFromDB({ emptyArg: 0 });
     }
 
-    async calculateCosineSimilarity(inputTensor: number[]): Promise<any> {
-        try {
-            const result = await GalleryEngine.calculateCosineSimilarity({ inputTensor });
-            console.log('Cosine similarity result:', result);
-            return result;
-        } catch (error) {
-            console.error('Error calculating cosine similarity:', error);
-        }
+    static async offloadTensor(): Promise<void> {
+        await GalleryEngine.offloadTensor({ emptyArg: 0 });
     }
 
-    private arrayBufferToBase64(buffer: ArrayBuffer): string {
-        const binary = String.fromCharCode.apply(null, new Uint8Array(buffer));
-        return window.btoa(binary);
+    static async calculateCosineSimilarity(tensorArray: number[]): Promise<number[]> {
+        const result = await GalleryEngine.calculateCosineSimilarity({ tensorArray: tensorArray });
+        return result.prob;
     }
 }
 

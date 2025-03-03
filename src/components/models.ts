@@ -9,7 +9,7 @@ export interface UserDO {
 export interface MediaDO {
     identifier: string; // Media Identifier
     name: string;
-    type: string;
+    type: "image" | "video";
     created_at: number;
     thumbnail: string;
     feature: Blob; // Feature

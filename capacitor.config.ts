@@ -27,14 +27,19 @@ const config: CapacitorConfig = {
       electronMacLocation: "/Volumes/Development_Lacie/Development/Databases",
       electronLinuxLocation: "Databases"
     },
-    "CapacitorCookies": {
-      "enabled": true
-    }
+    CapacitorHttp: {
+      enabled: true,
+    },
+    CapacitorCookies: {
+      enabled: true
+    },
+    capacitorGalleryEngine: {
+      enabled: true
+    },
   },
   server: {
-    url: 'https://localhost',
     cleartext: true, // 如果需要使用 HTTP 请求
-    allowNavigation: ['localhost', '10.12.80.224'] // 允许导航的域名
+    allowNavigation: ['localhost', '10.12.80.224', 'bun.sh'] // 允许导航的域名
   }
 };
 

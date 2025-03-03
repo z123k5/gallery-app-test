@@ -30,3 +30,6 @@ npm-debug.log*
 /platforms
 /plugins
 /www
+
+/public/temp
+/android/app/src/main/res/raw

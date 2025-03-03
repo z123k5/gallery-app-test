@@ -17,11 +17,11 @@ def capacitor_pods
   pod 'CapacitorCamera', :path => '../../node_modules/@capacitor/camera'
   pod 'CapacitorFilesystem', :path => '../../node_modules/@capacitor/filesystem'
   pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
-  pod 'CapacitorHttp', :path => '../../node_modules/@capacitor/http'
   pod 'CapacitorKeyboard', :path => '../../node_modules/@capacitor/keyboard'
   pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
   pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
   pod 'CapacitorGalleryPlus', :path => '../../node_modules/capacitor-gallery-plus'
+  pod 'CapacitorPluginTfliteCosinesCalc', :path => '../../capacitor-plugin-tflite-cosines-calc'
 end
 
 target 'App' do

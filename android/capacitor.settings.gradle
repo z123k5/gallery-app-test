@@ -20,9 +20,6 @@ project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacit
 include ':capacitor-haptics'
 project(':capacitor-haptics').projectDir = new File('../node_modules/@capacitor/haptics/android')
 
-include ':capacitor-http'
-project(':capacitor-http').projectDir = new File('../node_modules/@capacitor/http/android')
-
 include ':capacitor-keyboard'
 project(':capacitor-keyboard').projectDir = new File('../node_modules/@capacitor/keyboard/android')
 
@@ -34,3 +31,6 @@ project(':capacitor-status-bar').projectDir = new File('../node_modules/@capacit
 
 include ':capacitor-gallery-plus'
 project(':capacitor-gallery-plus').projectDir = new File('../node_modules/capacitor-gallery-plus/android')
+
+include ':capacitor-plugin-tflite-cosines-calc'
+project(':capacitor-plugin-tflite-cosines-calc').projectDir = new File('../capacitor-plugin-tflite-cosines-calc/android')
