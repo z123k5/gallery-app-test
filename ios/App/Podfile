@@ -27,6 +27,7 @@ end
 target 'App' do
   capacitor_pods
   # Add your Pods here
+  pod 'TensorFlowLiteSwift', '~> 2.17'
 end
 
 post_install do |installer|
