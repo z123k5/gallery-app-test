@@ -271,7 +271,8 @@ export default {
       highQualityPath: undefined, // 高质量图像路径
       showSearchBar: true,
       scale: 1,
-      serverUrl: 'https://10.12.80.224:8443',
+      // serverUrl: 'https://10.12.80.224:8443',
+      serverUrl: 'http://10.12.80.224:8443',
       databaseTensorShouldBeReload: false,
     };
   },
