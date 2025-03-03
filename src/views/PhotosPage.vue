@@ -581,8 +581,8 @@ export default {
           .then(blob => new Promise((resolve, reject) => {
             new Compressor(blob, {
               quality: 0.8, // 压缩质量
-              width: 200,
-              height: 200,
+              width: 800,
+              height: 800,
               convertTypes: ['image/jpeg'],
               success(result) {
                 resolve(URL.createObjectURL(result));
