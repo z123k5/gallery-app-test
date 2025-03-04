@@ -959,9 +959,6 @@ export default {
               this.searchMedias.push(this.medias[item.index]);
             });
 
-            console.log(this.searchMedias);
-
-
           });
         }
       } catch (error) {
