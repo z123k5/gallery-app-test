@@ -950,14 +950,14 @@ export default {
             console.log(prob);
 
             // 方法二：将medias和prob看成整体，按照prob对应的大小、位置降序排序，取前五个设置isHidden为false，其余为true
-            const probWithIndex = prob.map((value, index) => ({ value, index }));
-            probWithIndex.sort((a, b) => b.value - a.value);
-            console.log(probWithIndex);
-            this.searchMedias = [];
-            const right = Math.min(5, probWithIndex.length);
-            probWithIndex.slice(0, right).forEach((item) => {
-              this.searchMedias.push(this.medias[item.index]);
-            });
+            // const probWithIndex = prob.map((value, index) => ({ value, index }));
+            // probWithIndex.sort((a, b) => b.value - a.value);
+            // console.log(probWithIndex);
+            // this.searchMedias = [];
+            // const right = Math.min(5, probWithIndex.length);
+            // probWithIndex.slice(0, right).forEach((item) => {
+            //   this.searchMedias.push(this.medias[item.index]);
+            // });
 
           });
         }
