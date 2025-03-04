@@ -9,6 +9,7 @@ class GalleryEngineService {
     static async loadTensorFromDB(): Promise<void> {
         console.log("loadTensorFromDB");
         await GalleryEngine.loadTensorFromDB({ emptyArg: 0 });
+        console.log("loadTensorFromDB done");
     }
 
     static async offloadTensor(): Promise<void> {
