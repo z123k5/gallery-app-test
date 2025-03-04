@@ -655,7 +655,7 @@ export default {
         try {
           this.medias = []
           const result = await GalleryPlus.getMediaList({
-            limit: 200,
+            limit: 20,
             type: 'all',
             thumbnailSize: 200,
             sort: 'newest',
