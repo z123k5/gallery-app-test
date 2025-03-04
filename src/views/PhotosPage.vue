@@ -90,7 +90,7 @@ import {
 } from '@ionic/vue';
 import { ref, getCurrentInstance, computed } from 'vue';
 import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera";
-import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
+import { GalleryPlus, MediaItem, FullMediaItem } from 'capacitor-gallery-plus';
 import { Media } from '@capacitor-community/media'
 import { Capacitor, CapacitorException, CapacitorCookies } from "@capacitor/core";
 import CryptoJS from 'crypto-js';
@@ -170,6 +170,7 @@ export default {
       await this.uploadAndFetchCalculateResults();
       if (this.medias && this.medias.length > 0)
         await GalleryEngineService.loadTensorFromDB();
+      console.log("onmounted done");
     });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
@@ -974,13 +975,38 @@ export default {
       //   message: `id: ${media.id}\n <br/>type: ${media.type}\nwidth: ${media.width}\nheight: ${media.height}\nfileSize: ${media.fileSize}\n`,
       //   duration: 2000,
       // }).then((toast) => { toast.present(); })
+      let data: FullMediaItem;
 
-      const data = await GalleryPlus.getMedia({
-        id: media.id,
-        includeBaseColor: true,
-        includeDetails: true,
-        includePath: true,
-      });
+      if (this.platform === 'android') {
+        if (media.id.startsWith('fakeid')) {
+          // base64 to blob image
+          // const blob = await fetch(media.thumbnail as string).then(r => r.blob());
+          data = {
+            id: media.id,
+            type: media.type,
+            width: media.width,
+            height: media.height,
+            fileSize: media.fileSize,
+            createdAt: media.createdAt,
+            thumbnail: media.thumbnail,
+            path: media.thumbnail
+          }
+        } else {
+          data = await GalleryPlus.getMedia({
+            id: media.id,
+            includeBaseColor: true,
+            includeDetails: true,
+            includePath: true,
+          });
+        }
+      } else {
+        data = await GalleryPlus.getMedia({
+          id: media.id,
+          includeBaseColor: true,
+          includeDetails: true,
+          includePath: true,
+        });
+      }
 
       const modal = await modalController.create({
         component: MediaInfoModalComponent,

@@ -60,6 +60,8 @@ import { FullMediaItem } from 'capacitor-gallery-plus';
 import { Capacitor } from '@capacitor/core';
 import { modalController, toastController } from '@ionic/vue';
 import { IonButton, IonButtons, IonContent, IonHeader, IonImg, IonItem, IonLabel, IonList, IonTitle, IonToolbar } from '@ionic/vue';
+import SQLiteService from '@/implements/SqliteService';
+import { getCurrentInstance } from 'vue';
 
 export default {
     name: 'MediaInfoModalComponent',
@@ -81,6 +83,11 @@ export default {
             required: true
         }
     },
+    setup() {
+        const appInstance = getCurrentInstance();
+        const sqliteServ: SQLiteService = appInstance?.appContext.config.globalProperties.$sqliteServ;
+        return { sqliteServ };
+    },
     methods: {
         getMediaSrc(): string {
             if (!this.media.path) {
@@ -95,7 +102,10 @@ export default {
                 //     message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
                 //     duration: 1000
                 // }).then(toast => toast.present());
-            return Capacitor.convertFileSrc(this.media.path);
+                if (Capacitor.getPlatform() === 'android') {
+                    return this.media.path;
+                }
+                return Capacitor.convertFileSrc(this.media.path);
         },
         closeModal() {
             modalController.dismiss();
