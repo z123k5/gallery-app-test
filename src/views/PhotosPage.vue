@@ -475,9 +475,9 @@ export default {
 
             // 压缩文件
             new Compressor(blob, {
-              quality: 0.8,
-              maxWidth: 800,
-              maxHeight: 800,
+              quality: 1.0,
+              // maxWidth: 800,
+              // maxHeight: 800,
               convertTypes: ['image/jpeg'],
               success: async (result) => {
                 formData.append("file", result, "image.png");
@@ -959,11 +959,14 @@ export default {
               this.searchMedias.push(this.medias[item.index]);
             });
 
+            console.log(this.searchMedias.length);
+
           });
         }
       } catch (error) {
         console.error('Error:', error);
       }
+      console.log("Search Done.");
     },
 
     async showActionSheet(media: MediaItem) {
