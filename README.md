@@ -1,3 +1,22 @@
+This project is based on "Capacitor Gallery Plus" by Stephan Fischer.  
+该项目以 Stephan Fischer 的 “Capacitor Gallery Plus ”为基础。
+Original repository: [https://github.com/stephan-fischer/capacitor-gallery-plus](https://github.com/stephan-fischer/capacitor-gallery-plus)  
+
+For commercial use, a license must be obtained from the original author:  
+如需用于商业用途，必须从原作者处得到许可。
+[https://github.com/stephan-fischer/capacitor-gallery-plus](https://github.com/stephan-fischer/capacitor-gallery-plus)
+
+This project is dual-licensed under:  
+- **MIT License** – For personal, educational, and open-source use.  
+- **Commercial License** – Required for closed-source, proprietary, or commercial use.  
+For commercial use, a license must be obtained from the original author:  
+[https://github.com/stephan-fischer/capacitor-gallery-plus](https://github.com/stephan-fischer/capacitor-gallery-plus)  
+本项目具有双重许可：
+- **MIT 许可** - 用于个人、教育和开源用途。 
+- **商业许可** - 闭源、专有或商业用途所需的许可。 
+如需用于商业用途，必须从原作者处获得许可：
+[https://github.com/stephan-fischer/capacitor-gallery-plus](https://github.com/stephan-fischer/capacitor-gallery-plus)  
+
 # 毕业设计2025
 ## 基于VLM的手机图库分类搜索系统的设计与实现
 系统概述
