@@ -4,6 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.vod.gallery',
   appName: 'photo-gallery',
   webDir: 'dist',
+  
   plugins: {
     Media: {
       androidGalleryMode: true
@@ -39,7 +40,7 @@ const config: CapacitorConfig = {
   },
   server: {
     cleartext: true, // 如果需要使用 HTTP 请求
-    allowNavigation: ['localhost', '10.12.80.224', 'bun.sh'] // 允许导航的域名
+    allowNavigation: ['localhost', 'frp-dad.com'] // 允许导航的域名
   }
 };
 

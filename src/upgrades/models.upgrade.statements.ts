@@ -10,7 +10,7 @@ export const UserUpgradeStatements = [
         token_expire DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE IF NOT EXISTS media (
-        identifier string PRIMARY KEY,
+        identifier TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

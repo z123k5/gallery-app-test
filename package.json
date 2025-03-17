@@ -28,7 +28,7 @@
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
     "buffer": "^6.0.3",
-    "capacitor-gallery-plus": "^0.1.1",
+    "capacitor-gallery-plus": "github:z123k5/capacitor-gallery-plus",
     "capacitor-plugin-tflite-cosines-calc": "file:capacitor-plugin-tflite-cosines-calc",
     "compressorjs": "^1.2.1",
     "crypto-js": "^4.2.0",

@@ -7,6 +7,7 @@ import { UserUpgradeStatements } from '../upgrades/models.upgrade.statements';
 import { MediaDO, UserDO } from '../components/models';
 import { MediaItem } from 'capacitor-gallery-plus'
 import { Buffer } from 'buffer';
+import { toastController } from '@ionic/vue';
 
 export interface IStorageService {
     initializeDatabase(): Promise<void>
@@ -118,10 +119,22 @@ class StorageService implements IStorageService {
     }
 
     async addManyMedias(medias: MediaDO[]): Promise<void> {
+        if (medias.length === 0) {
+            return;
+        }
         try {
-            const sql = `INSERT INTO media (identifier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
-            await this.db.run(sql, medias.map(media => [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]));
-            console.log(`sqliteService.addManyMedias: ${medias.length}`);
+            const batchSize = 10; // 根据数据库限制设置批次大小
+            for (let i = 0; i < medias.length; i += batchSize) {
+                const batchMedias = medias.slice(i, i + batchSize);
+                const sql = `INSERT INTO media (identifier, name, type, created_at, thumbnail, processStep) VALUES ${batchMedias.map(() => '(?, ?, ?, ?, ?, ?)').join(',')};`;
+                const params = batchMedias.map(media => [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]);
+                await this.db.run(sql, params.flat());
+            }
+
+            // 以下是单次插入的写法
+            // const sql = `INSERT INTO media (identifier, name, type, created_at, thumbnail, processStep) VALUES (?, ?, ?, ?, ?, ?);`;
+            // await this.db.run(sql, medias.map(media => [media.identifier, media.name, media.type, media.created_at, media.thumbnail, media.processStep]));
+            // console.log(`sqliteService.addManyMedias: ${medias.length}`);
         } catch (error: any) {
             const msg = error.message ? error.message : error;
             throw new Error(`storageService.addManyMedias: ${msg}`);
@@ -203,15 +216,20 @@ class StorageService implements IStorageService {
             // MediaDO
             return {
                 identifier: media.id,
-                name: media.name ?? '',
+                name: media.name!,
                 type: media.type,
                 created_at: media.createdAt,
-                thumbnail: "",
+                thumbnail: media.thumbnail!,
                 processStep: 0,
                 feature: new Blob(),
             }
         })
+
         await this.addManyMedias(mediasToAdd);
+        toastController.create({
+            message: `storageService.autoAddOrDeleteMedia: mediasIdsInDbToDelete: ${[...mediasIdsInDbToDelete].length}, mediasIdsInDbToAdd: ${[...mediasIdsInDbToAdd].length}
+            `, duration: 5000
+        }).then(toast => toast.present());
     }
 }
 export default StorageService;

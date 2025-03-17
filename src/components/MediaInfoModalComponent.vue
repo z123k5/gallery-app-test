@@ -98,13 +98,6 @@ export default {
                 return '';
 
             } else
-                // toastController.create({
-                //     message: "path:" + this.media.path + ", src:" + Capacitor.convertFileSrc(this.media.path),
-                //     duration: 1000
-                // }).then(toast => toast.present());
-                if (Capacitor.getPlatform() === 'android') {
-                    return this.media.path;
-                }
                 return Capacitor.convertFileSrc(this.media.path);
         },
         closeModal() {
@@ -114,3 +107,19 @@ export default {
 }
 
 </script>
+
+<style scoped>
+video {
+    width: 100%;
+}
+
+.base-color {
+
+    width: 25px;
+    height: 25px;
+    display: inline-block;
+    border: 1px solid grey;
+    vertical-align: middle;
+    margin: 0 0 0 5px;
+}
+</style>
