@@ -265,8 +265,24 @@ class StorageService implements IStorageService {
         }
     }
 
+    async getTagsNames(): Promise<string[]> {
+        const sql = `SELECT name FROM classes`;
+        const res = await this.db.query(sql);
+        return res.values!.map((item: any) => item.name);
+    }
 
+    async getMediasByTag(tag: string): Promise<MediaDO[]> {
+        const sql = `SELECT m.* FROM media m INNER JOIN media_classes mc ON m.identifier = mc.media_id INNER JOIN classes c ON mc.class_id = c.id WHERE c.name = ?`;
+        const params = [tag];
+        const res = await this.db.query(sql, params);
+        return res.values as MediaDO[];
+    }
 
-
+    async getMediaIdsByTagIds(tags: number[]): Promise<string[]> {
+        const sql = `SELECT media_id FROM media_classes WHERE class_id IN (?)`;
+        const params = [tags.join(',')];
+        const res = await this.db.query(sql, params);
+        return res.values!.map((item: any) => item.media_id);
+    }
 }
 export default StorageService;

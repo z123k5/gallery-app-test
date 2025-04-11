@@ -49,6 +49,8 @@ import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFab, IonFabBut
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import MediaInfoModalComponent from '@/components/MediaInfoModalComponent.vue';
 import { camera, arrowForward } from 'ionicons/icons';
+import StorageService from '@/implements/StorageService';
+import { getCurrentInstance } from 'vue';
 
 interface Category {
   id: number;
@@ -59,7 +61,10 @@ interface Category {
 export default {
   name: 'CategoryPage',
   setup() {
+    const appInstance = getCurrentInstance();
+    const storageServ: StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
     return {
+      storageServ,
       camera
     }
   },
@@ -80,6 +85,37 @@ export default {
       arrowForward,
       videocam: 'videocam'
     }
+  },
+
+  // activated is called when the component is activated (when the user navigates to this page) and retrieves the media from PhotosPage.
+  activated() {
+    // get medias from database by category
+    // wait until this.cats is populated
+    // then get medias from database by category
+
+    // get medias from router params
+    const catId = this.$route.params.catId;
+
+    this.cats.forEach((cat, index) => {
+      this.storageServ.getMediaIdsByTagIds([cat.id]).then((mediaIds) => {
+        // 
+      });
+    });
+
+  },
+  mounted() {
+    // get tags names from database
+    this.storageServ.getTagsNames().then((tags) => {
+      tags.forEach((tag, index) => {
+        this.cats.push({
+          id: index,
+          name: tag,
+          medias: []
+        });
+      });
+    });
+
+    
   },
   methods: {
     async showActionSheet(media: MediaItem) {
