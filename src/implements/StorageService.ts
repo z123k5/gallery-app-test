@@ -2,7 +2,7 @@ import { platform } from '../main';
 import { BehaviorSubject } from 'rxjs';
 import { ISQLiteService } from './SqliteService';
 import { IDbVersionService } from './dbVersionService';
-import { SQLiteDBConnection } from '@capacitor-community/sqlite';
+import { capSQLiteChanges, SQLiteDBConnection } from '@capacitor-community/sqlite';
 import { UserUpgradeStatements } from '../upgrades/models.upgrade.statements';
 import { MediaDO, UserDO } from '../components/models';
 import { MediaItem } from 'capacitor-gallery-plus'
@@ -26,10 +26,15 @@ class StorageService implements IStorageService {
     sqliteServ!: ISQLiteService;
     dbVerServ!: IDbVersionService;
     isInitCompleted = new BehaviorSubject(false);
+    tagsListCache: string[] = [];
 
     constructor(sqliteService: ISQLiteService, dbVersionService: IDbVersionService) {
         this.sqliteServ = sqliteService;
         this.dbVerServ = dbVersionService;
+    }
+
+    setTagsListCache(tagsList: string[]): void {
+        this.tagsListCache = tagsList;
     }
 
     getDatabaseName(): string {
@@ -100,6 +105,13 @@ class StorageService implements IStorageService {
         const params = [identifier];
         const res = await this.db.query(sql, params);
         return res.values![0].processStep;
+    }
+
+    async getMediaTagCountsByIndentifier(identifier: string): Promise<number | undefined> {
+        const sql = `SELECT COUNT(class_id) AS cnt FROM media_classes WHERE media_id = ?;`;
+        const params = [identifier];
+        const res = await this.db.query(sql, params);
+        return res.values![0].cnt;
     }
 
     async getMedias(): Promise<MediaDO[]> {
@@ -181,12 +193,15 @@ class StorageService implements IStorageService {
         }
 
         try {
-            const batchSize = 999; // 根据数据库限制设置批次大小
+            const batchSize = 99; // 根据数据库限制设置批次大小
             for (let i = 0; i < identifiers.length; i += batchSize) {
                 const batchIdentifiers = identifiers.slice(i, i + batchSize);
                 const placeholders = batchIdentifiers.map(() => '?').join(',');
                 const sql = `DELETE FROM media WHERE identifier IN (${placeholders})`;
                 await this.db.run(sql, batchIdentifiers);
+
+                const sql2 = `DELETE FROM media_classes WHERE media_id IN (${placeholders})`;
+                await this.db.run(sql2, batchIdentifiers);
             }
         } catch (error: any) {
             const msg = error.message ? error.message : error;
@@ -231,5 +246,27 @@ class StorageService implements IStorageService {
             `, duration: 5000
         }).then(toast => toast.present());
     }
+
+    async addTagToMedia(identifier: string, tags: string[]): Promise<void> {
+        const sql = `INSERT INTO media_classes (media_id, class_id) VALUES (?, ?)`;
+        // convert tag names to tag ids
+        const tagIds = tags.map(tag => {
+            const tagId = this.tagsListCache.indexOf(tag);
+            if (tagId === -1) {
+                throw new Error(`storageService.addTagToMedia: tag not found`);
+            }
+            return tagId;
+        });
+        const params = tagIds.map(tagId => [identifier, tagId]);
+        console.log(params);
+
+        for (const param of params) {
+            await this.db.run(sql, param);
+        }
+    }
+
+
+
+
 }
 export default StorageService;

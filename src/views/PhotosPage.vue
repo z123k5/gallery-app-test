@@ -127,6 +127,8 @@ export default {
     const dbInitialized = computed(() => !!db.value);
     const platform = sqliteServ.getPlatform();
 
+    const tags = ["人物", "动物", "植物", "食物", "建筑", "家具", "交通工具", "电子产品", "服装", "乐器", "屏幕截图"];
+
     // Open Database
     const openDatabase = async () => {
       try {
@@ -151,7 +153,7 @@ export default {
     return {
       camera, images, videocam,
       galleryEngineServ, sqliteServ, storageServ, db, dbInitialized, platform, openDatabase,
-      isInitComplete, dbNameRef, isDatabase, users
+      isInitComplete, dbNameRef, isDatabase, users, tags
     }
   },
   computed: {
@@ -165,8 +167,8 @@ export default {
     }
   },
   mounted() {
+    this.storageServ.setTagsListCache(this.tags);
     this.getMedia().then(async () => {
-      // await this.saveMediaToDatabase();
       await this.uploadAndFetchCalculateResults();
       if (this.medias && this.medias.length > 0)
         await GalleryEngineService.loadTensorFromDB();
@@ -421,18 +423,23 @@ export default {
             // fetch upload
             const formData = new FormData();
             formData.append("file", blob, "image.png");  // 传标准文件名
+            // this.tags.forEach(tag => {
+            //   formData.append("tags", tag); // 多次添加同名字段实现数组
+            // });
+            formData.append("tags", JSON.stringify(this.tags));
 
             const responseBin = await fetch(this.serverUrl + '/engine/resolve', {
               method: 'POST',
               headers: {
                 'Authorization': 'Bearer ' + token,
-                'Accept': 'application/octet-stream'  // 让服务器返回纯二进制
+                'Accept': 'application/json'
               },
               body: formData
             });
 
             if (responseBin.ok) {
-              const encoded_data = (await responseBin.json())["feat"]
+              const responseJson = (await responseBin.json())
+              const encoded_data = responseJson["feat"]
 
               const decodedData = atob(encoded_data);
               const arrayBuffer = new ArrayBuffer(decodedData.length);
@@ -444,6 +451,11 @@ export default {
 
               // 存入数据库
               await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
+              // if (await this.storageServ.getMediaTagCountsByIndentifier(media.id) === 0) {
+              const tags = responseJson["tags"]
+              if (tags && tags.length > 0) {
+                await this.storageServ.addTagToMedia(media.id, responseJson["tags"]);
+              }
             } else {
               console.error('Error uploading media:', responseBin.statusText);
             }
@@ -531,21 +543,25 @@ export default {
 
             if (!blob) {
               console.error('Failed to get blob from media:', media);
-              continue; 
+              continue;
             }
 
             // 不压缩文件
             formData.append("file", blob, "image.png");
+            formData.append("tags", JSON.stringify(this.tags));
+            console.log('formData:', formData.get('tags'));
             const response = await fetch(this.serverUrl + '/engine/resolve', {
               method: 'POST',
               headers: {
                 'Authorization': 'Bearer ' + token,
+                'Accept': 'application/json'
               },
               body: formData
             });
 
             if (response.ok) {
-              const encoded_data = (await response.json())["feat"]
+              const responseJson = (await response.json())
+              const encoded_data = responseJson["feat"]
               const decodedData = atob(encoded_data);
               const arrayBuffer = new ArrayBuffer(decodedData.length);
               const uint8Array = new Uint8Array(arrayBuffer);
@@ -555,6 +571,10 @@ export default {
               }
               try {
                 await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
+                const resultTags = responseJson["tags"]
+                if (resultTags.length > 0) {
+                  await this.storageServ.addTagToMedia(media.id, resultTags);
+                }
                 console.log('updateMediaByIdentifier success');
               } catch (error) {
                 console.error('Failed to save result to database:', error);
@@ -575,205 +595,205 @@ export default {
     },
 
     async getMedia() {
-        // const imagesUris = [
-        //   './temp/_DSC2035.JPG',
-        //   './temp/_DSC2056.JPG',
-        //   './temp/_DSC2807.JPG',
-        //   './temp/_DSC2808.JPG',
-        //   './temp/_DSC2809.JPG',
-        //   './temp/_DSC2845.JPG',
-        //   './temp/_DSC2848.JPG',
-        //   './temp/_DSC2851.JPG',
-        //   './temp/_DSC2852.JPG',
-        //   './temp/_DSC2857.JPG',
-        // ]
-        this.medias = []
-        // if (this.platform == "android") {
-        //   // from database
-        //   const resultdb = await this.storageServ.getMedias();
-        //   resultdb.forEach(async (media) => {
-        //     this.medias.push({
-        //       id: media.identifier,
-        //       type: media.type,
-        //       createdAt: media.created_at,
-        //       baseColor: '#000000',
-        //       name: media.name,
-        //       width: 100,
-        //       height: 100,
-        //       thumbnail: media.thumbnail,
-        //       fileSize: media.thumbnail.length,
-        //       // path: `fake-image-${i}`,
-        //       mimeType: 'image/jpeg',
-        //       isHidden: false,
-        //     }
-        //     )
-        //   });
-        //   if (this.medias.length > 0) {
-        //     return;
-        //   }
+      // const imagesUris = [
+      //   './temp/_DSC2035.JPG',
+      //   './temp/_DSC2056.JPG',
+      //   './temp/_DSC2807.JPG',
+      //   './temp/_DSC2808.JPG',
+      //   './temp/_DSC2809.JPG',
+      //   './temp/_DSC2845.JPG',
+      //   './temp/_DSC2848.JPG',
+      //   './temp/_DSC2851.JPG',
+      //   './temp/_DSC2852.JPG',
+      //   './temp/_DSC2857.JPG',
+      // ]
+      this.medias = []
+      // if (this.platform == "android") {
+      //   // from database
+      //   const resultdb = await this.storageServ.getMedias();
+      //   resultdb.forEach(async (media) => {
+      //     this.medias.push({
+      //       id: media.identifier,
+      //       type: media.type,
+      //       createdAt: media.created_at,
+      //       baseColor: '#000000',
+      //       name: media.name,
+      //       width: 100,
+      //       height: 100,
+      //       thumbnail: media.thumbnail,
+      //       fileSize: media.thumbnail.length,
+      //       // path: `fake-image-${i}`,
+      //       mimeType: 'image/jpeg',
+      //       isHidden: false,
+      //     }
+      //     )
+      //   });
+      //   if (this.medias.length > 0) {
+      //     return;
+      //   }
 
-        //   // If Empty, load photo by fetch from public/temp/*.JPG
-        //   this.medias = (await Promise.all(imagesUris.map(url => fetch(url)
-        //     .then(response => response.blob())
-        //     .then(blob => new Promise((resolve, reject) => {
-        //       new Compressor(blob, {
-        //         quality: 0.8, // 压缩质量
-        //         width: 800,
-        //         height: 800,
-        //         convertTypes: ['image/jpeg'],
-        //         success(result) {
-        //           resolve(URL.createObjectURL(result));
-        //         },
-        //         error(err) {
-        //           console.log(err.message);
-        //           reject(err);
-        //         },
-        //       });
-        //     })))) as string[]
-        //   ).map((img, index) => ({
-        //     id: `fakeid-${index}`,
-        //     type: 'image',
-        //     createdAt: new Date().getMilliseconds(),
-        //     thumbnail: img,
-        //     baseColor: '#000000',
-        //     name: `fake-image-${index}`,
-        //     width: 100,
-        //     height: 100,
-        //     fileSize: img.length,
-        //     mimeType: 'image/jpeg',
-        //   }));
+      //   // If Empty, load photo by fetch from public/temp/*.JPG
+      //   this.medias = (await Promise.all(imagesUris.map(url => fetch(url)
+      //     .then(response => response.blob())
+      //     .then(blob => new Promise((resolve, reject) => {
+      //       new Compressor(blob, {
+      //         quality: 0.8, // 压缩质量
+      //         width: 800,
+      //         height: 800,
+      //         convertTypes: ['image/jpeg'],
+      //         success(result) {
+      //           resolve(URL.createObjectURL(result));
+      //         },
+      //         error(err) {
+      //           console.log(err.message);
+      //           reject(err);
+      //         },
+      //       });
+      //     })))) as string[]
+      //   ).map((img, index) => ({
+      //     id: `fakeid-${index}`,
+      //     type: 'image',
+      //     createdAt: new Date().getMilliseconds(),
+      //     thumbnail: img,
+      //     baseColor: '#000000',
+      //     name: `fake-image-${index}`,
+      //     width: 100,
+      //     height: 100,
+      //     fileSize: img.length,
+      //     mimeType: 'image/jpeg',
+      //   }));
 
 
 
-        //   // TODO: Not Implemented
-        //   // const result = (await Media.getMedias({})).medias;
-        //   // // Map MediaAsset[] to MediaItem[]
-        //   // this.medias = result.map((result) => {
-        //   //   const mediaItem: MediaItem = {
-        //   //     id: result.identifier,
-        //   //     name: result.identifier,
-        //   //     type: result.duration ? "video" : "image",
-        //   //     createdAt: new Date(result.creationDate).getTime(),
-        //   //     thumbnail: result.data,
-        //   //     width: result.fullWidth,
-        //   //     height: result.fullHeight,
-        //   //     mimeType: result.duration ? "video/mp4" : "image/jpeg",
-        //   //   };
-        //   //   return mediaItem;
-        //   // });
+      //   // TODO: Not Implemented
+      //   // const result = (await Media.getMedias({})).medias;
+      //   // // Map MediaAsset[] to MediaItem[]
+      //   // this.medias = result.map((result) => {
+      //   //   const mediaItem: MediaItem = {
+      //   //     id: result.identifier,
+      //   //     name: result.identifier,
+      //   //     type: result.duration ? "video" : "image",
+      //   //     createdAt: new Date(result.creationDate).getTime(),
+      //   //     thumbnail: result.data,
+      //   //     width: result.fullWidth,
+      //   //     height: result.fullHeight,
+      //   //     mimeType: result.duration ? "video/mp4" : "image/jpeg",
+      //   //   };
+      //   //   return mediaItem;
+      //   // });
 
-        // } else
-        {
-          const checkPermission = async () => {
-            const permission = await GalleryPlus.checkPermissions();
+      // } else
+      {
+        const checkPermission = async () => {
+          const permission = await GalleryPlus.checkPermissions();
 
-            if (permission.status !== "granted") {
-              const request = await GalleryPlus.requestPermissions();
+          if (permission.status !== "granted") {
+            const request = await GalleryPlus.requestPermissions();
 
-              if (request.status !== "granted") {
-                toastController.create({
-                  message: "Gallery Permission denied, please allow access.",
-                  duration: 5000
-                }).then(toast => toast.present());
-                console.error("Permission denied.");
-              } else {
-                toastController.create({
-                  message: "Gallery Permission granted.",
-                  duration: 2000
-                }).then(toast => toast.present());
-              }
+            if (request.status !== "granted") {
+              toastController.create({
+                message: "Gallery Permission denied, please allow access.",
+                duration: 5000
+              }).then(toast => toast.present());
+              console.error("Permission denied.");
+            } else {
+              toastController.create({
+                message: "Gallery Permission granted.",
+                duration: 2000
+              }).then(toast => toast.present());
             }
-          }
-          checkPermission();
-          try {
-            this.medias = []
-            const result = await GalleryPlus.getMediaList({
-              limit: 200,
-              type: 'all',
-              thumbnailSize: 200,
-              sort: 'newest',
-              includeDetails: true, // TODO: edit
-              includeBaseColor: false,
-            })
-            this.medias = result.media
-
-
-            for (const media of this.medias) {
-              if (media.name === undefined) {
-                media.name = media.id;
-              }
-              if (media.thumbnail) {
-                media.thumbnail = Capacitor.convertFileSrc(media.thumbnail as string)
-              } else {
-                // const { base64 } = await this.readUriAsBlobImage(media.path)
-                console.log('media.thumbnail is null: ');
-                console.log(media);
-                // media.thumbnail = base64
-              }
-            }
-
-            // store to database
-            this.storageServ.autoAddOrDeleteMedia(this.medias);
-            // for (const media of this.medias) {
-            //   try {
-            //     await this.storageServ.addMedia({
-            //       identifier: media.id,
-            //       type: media.type,
-            //       created_at: media.createdAt,
-            //       name: media.name!,
-            //       thumbnail: media.thumbnail!,
-            //       processStep: 0,
-            //       feature: new Blob,
-            //     })
-            //   } catch (error) {
-            //     console.log('Error saving media:', error)
-            //   }
-            // }
-          } catch (error) {
-            toastController.create({
-              message: 'Error retrieving media: ' + error,
-              duration: 2000,
-            }).then((toast) => { toast.present(); })
-            console.error('Error retrieving media:', error)
           }
         }
-      },
+        checkPermission();
+        try {
+          this.medias = []
+          const result = await GalleryPlus.getMediaList({
+            limit: 200,
+            type: 'all',
+            thumbnailSize: 200,
+            sort: 'newest',
+            includeDetails: true, // TODO: edit
+            includeBaseColor: false,
+          })
+          this.medias = result.media
+
+
+          for (const media of this.medias) {
+            if (media.name === undefined) {
+              media.name = media.id;
+            }
+            if (media.thumbnail) {
+              media.thumbnail = Capacitor.convertFileSrc(media.thumbnail as string)
+            } else {
+              // const { base64 } = await this.readUriAsBlobImage(media.path)
+              console.log('media.thumbnail is null: ');
+              console.log(media);
+              // media.thumbnail = base64
+            }
+          }
+
+          // store to database
+          this.storageServ.autoAddOrDeleteMedia(this.medias);
+          // for (const media of this.medias) {
+          //   try {
+          //     await this.storageServ.addMedia({
+          //       identifier: media.id,
+          //       type: media.type,
+          //       created_at: media.createdAt,
+          //       name: media.name!,
+          //       thumbnail: media.thumbnail!,
+          //       processStep: 0,
+          //       feature: new Blob,
+          //     })
+          //   } catch (error) {
+          //     console.log('Error saving media:', error)
+          //   }
+          // }
+        } catch (error) {
+          toastController.create({
+            message: 'Error retrieving media: ' + error,
+            duration: 2000,
+          }).then((toast) => { toast.present(); })
+          console.error('Error retrieving media:', error)
+        }
+      }
+    },
 
     async QueryAll() {
-        const result = await this.storageServ.getMedias();
-        console.log(result);
-        toastController.create({
-          message: 'Query all media: ' + this.medias.length,
-          duration: 2000,
-        }).then((toast) => { toast.present(); })
-      },
+      const result = await this.storageServ.getMedias();
+      console.log(result);
+      toastController.create({
+        message: 'Query all media: ' + this.medias.length,
+        duration: 2000,
+      }).then((toast) => { toast.present(); })
+    },
 
-      /**
-       * Browser
-       */
-      getCookies() {
-        return document.cookie;
-      },
-      getCookie(key: string) {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-          const cookie = cookies[i].trim();
-          if (cookie.startsWith(key + '=')) {
-            return cookie.substring(key.length + 1);
-          }
+    /**
+     * Browser
+     */
+    getCookies() {
+      return document.cookie;
+    },
+    getCookie(key: string) {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.startsWith(key + '=')) {
+          return cookie.substring(key.length + 1);
         }
-        return null;
-      },
-      setCookie(key: string, value: string) {
-        document.cookie = key + '=' + value;
-      },
+      }
+      return null;
+    },
+    setCookie(key: string, value: string) {
+      document.cookie = key + '=' + value;
+    },
     async deleteCookie(key: string) {
-        const url = this.serverUrl;
-        await CapacitorCookies.deleteCookie({
-          url: url,
-          key: key
-        });
-      },
+      const url = this.serverUrl;
+      await CapacitorCookies.deleteCookie({
+        url: url,
+        key: key
+      });
+    },
     // zoomIn() {
     //   this.scale += 1.5;
     //   if (this.scale > 3) {
@@ -791,280 +811,240 @@ export default {
     /**
      * Actions
      */
-    async performLogin(): Promise < string > {
-        try {
-          const formData = new URLSearchParams();
-          formData.append('username', 'admin');
-          formData.append('password', 'admin');
-          const response = await fetch(this.serverUrl + '/users/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData
-          });
-          const data = await response.json();
-          return data.access_token;
-        } catch(error) {
-          console.error('Error:', error);
-          return '';
-        }
-      },
-
-        async readUriAsBlobImage(uri: string) {
-        if (!uri) {
-          return { base64: '', width: 0, height: 0 };
-        }
-
-        if (this.platform === 'android') {
-          // In Android ,fetch file is not available
-
-        }
-
-        const response = await fetch(uri)
-        const blob = await response.blob();
-
-        return new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string') {
-              const img = new Image();
-              img.onload = () => {
-                resolve({
-                  base64: reader.result as string,
-                  width: img.width,
-                  height: img.height,
-                });
-              };
-              img.onerror = () => reject(new Error('无法获取图片尺寸'));
-              img.src = reader.result;
-            } else {
-              reject(new Error('无法获取 Base64 字符串'));
-            }
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
+    async performLogin(): Promise<string> {
+      try {
+        const formData = new URLSearchParams();
+        formData.append('username', 'admin');
+        formData.append('password', 'admin');
+        const response = await fetch(this.serverUrl + '/users/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData
         });
-      },
+        const data = await response.json();
+        return data.access_token;
+      } catch (error) {
+        console.error('Error:', error);
+        return '';
+      }
+    },
+
+    async readUriAsBlobImage(uri: string) {
+      if (!uri) {
+        return { base64: '', width: 0, height: 0 };
+      }
+
+      if (this.platform === 'android') {
+        // In Android ,fetch file is not available
+
+      }
+
+      const response = await fetch(uri)
+      const blob = await response.blob();
+
+      return new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === 'string') {
+            const img = new Image();
+            img.onload = () => {
+              resolve({
+                base64: reader.result as string,
+                width: img.width,
+                height: img.height,
+              });
+            };
+            img.onerror = () => reject(new Error('无法获取图片尺寸'));
+            img.src = reader.result;
+          } else {
+            reject(new Error('无法获取 Base64 字符串'));
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    },
 
     async takePhotoAction() {
-        // show toast message
-        await toastController.create({
-          message: 'Taking photo...',
+      // show toast message
+      await toastController.create({
+        message: 'Taking photo...',
+        duration: 2000,
+      }).then((toast) => toast.present());
+
+      const image = await Camera.getPhoto({
+        resultType: CameraResultType.Uri,
+        saveToGallery: true,
+        quality: 100,
+        source: CameraSource.Prompt,
+        promptLabelHeader: '选择来源',
+        promptLabelPhoto: '从相册中选择',
+        promptLabelPicture: '拍照',
+        promptLabelCancel: '取消',
+        // webUseInput: true,
+        // allowEditing: true,
+        // width: 100,
+        // height: 100,
+      });
+
+      try {
+        const { base64, width, height } = await this.readUriAsBlobImage(image.path ?? '');
+        toastController.create({
+          message: `width: ${width}, height: ${height}`,
           duration: 2000,
-        }).then((toast) => toast.present());
+        }).then((toast) => { toast.present(); })
+        this.medias = [...this.medias, {
+          id: `captured-${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}`,
+          type: 'image',
+          createdAt: new Date().getMilliseconds(),
+          baseColor: '#000000',
+          name: `${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}.${image.format}`,
+          width: width,
+          height: height,
+          thumbnail: base64,
+          fileSize: image.base64String?.length,
+          // path: image.path,
+          mimeType: 'image/jpeg',
+        }]
+        // toastController.create({
+        //   message: "照片成功存入相册",
+        //   duration: 2000,
+        // }).then((toast) => { toast.present(); })
 
-        const image = await Camera.getPhoto({
-          resultType: CameraResultType.Uri,
-          saveToGallery: true,
-          quality: 100,
-          source: CameraSource.Prompt,
-          promptLabelHeader: '选择来源',
-          promptLabelPhoto: '从相册中选择',
-          promptLabelPicture: '拍照',
-          promptLabelCancel: '取消',
-          // webUseInput: true,
-          // allowEditing: true,
-          // width: 100,
-          // height: 100,
-        });
-
-        try {
-          const { base64, width, height } = await this.readUriAsBlobImage(image.path ?? '');
+      } catch (e: unknown) {
+        // show toast message
+        if (e instanceof CapacitorException) {
           toastController.create({
-            message: `width: ${width}, height: ${height}`,
+            message: "错误：" + e.message,
             duration: 2000,
           }).then((toast) => { toast.present(); })
-          this.medias = [...this.medias, {
-            id: `captured-${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}`,
-            type: 'image',
-            createdAt: new Date().getMilliseconds(),
-            baseColor: '#000000',
-            name: `${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}.${image.format}`,
-            width: width,
-            height: height,
-            thumbnail: base64,
-            fileSize: image.base64String?.length,
-            // path: image.path,
-            mimeType: 'image/jpeg',
-          }]
-          // toastController.create({
-          //   message: "照片成功存入相册",
-          //   duration: 2000,
-          // }).then((toast) => { toast.present(); })
+        }
+      }
+    },
 
-        } catch (e: unknown) {
-          // show toast message
-          if (e instanceof CapacitorException) {
+    async handleSearch(event: any) {
+      // 1. fetch server /engine/query
+      // 2. get feature from server
+      // 3. calculate the cosine similarity
+      // 4. show the result
+
+      // /users/active
+      if (this.databaseTensorShouldBeReload) {
+        await GalleryEngineService.loadTensorFromDB();
+        this.databaseTensorShouldBeReload = false;
+      }
+      try {
+        const response = await fetch(`${this.serverUrl}/users/active`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.getCookie('token')}`,
+          },
+        });
+
+        if (response.status === 401) {
+          // Token is invalid, perform login
+          const token = await this.performLogin();
+          if (token !== null) {
+            this.setCookie('token', token);
+          } else {
             toastController.create({
-              message: "错误：" + e.message,
+              message: 'Login failed',
               duration: 2000,
             }).then((toast) => { toast.present(); })
           }
         }
-      },
+      } catch (error) {
+        console.log(error);
+      }
 
-    async handleSearch(event: any) {
-        // 1. fetch server /engine/query
-        // 2. get feature from server
-        // 3. calculate the cosine similarity
-        // 4. show the result
-
-        // /users/active
-        if (this.databaseTensorShouldBeReload) {
-          await GalleryEngineService.loadTensorFromDB();
-          this.databaseTensorShouldBeReload = false;
+      try {
+        if (event.target.value === "") {
+          this.displaySearchResult = false;
+          return;
+        } else {
+          this.displaySearchResult = true;
         }
-        try {
-          const response = await fetch(`${this.serverUrl}/users/active`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${this.getCookie('token')}`,
-            },
-          });
+        const response = await fetch(`${this.serverUrl}/engine/query?query=${encodeURIComponent(event.target.value)}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.getCookie('token'),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        })
 
-          if (response.status === 401) {
-            // Token is invalid, perform login
-            const token = await this.performLogin();
-            if (token !== null) {
-              this.setCookie('token', token);
-            } else {
-              toastController.create({
-                message: 'Login failed',
-                duration: 2000,
-              }).then((toast) => { toast.present(); })
-            }
-          }
-        } catch (error) {
-          console.log(error);
-        }
+        const contentType = response.headers.get('Content-Type');
+        if (contentType === 'application/octet-stream') {
+          response.arrayBuffer().then(async (arrayBuffer) => {
+            console.log("Got Array Buffer, length = " + arrayBuffer.byteLength);
 
-        try {
-          if (event.target.value === "") {
-            this.displaySearchResult = false;
-            return;
-          } else {
-            this.displaySearchResult = true;
-          }
-          const response = await fetch(`${this.serverUrl}/engine/query?query=${encodeURIComponent(event.target.value)}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + this.getCookie('token'),
-              'X-Requested-With': 'XMLHttpRequest',
-            },
-          })
+            // ✅ 转换 `ArrayBuffer` 为 `Uint8Array`
+            const float32Array = new Float32Array(arrayBuffer);
 
-          const contentType = response.headers.get('Content-Type');
-          if (contentType === 'application/octet-stream') {
-            response.arrayBuffer().then(async (arrayBuffer) => {
-              console.log("Got Array Buffer, length = " + arrayBuffer.byteLength);
+            // ✅ 转换为 JS 数组（否则 Capacitor 不支持）
+            const tensorArray = Array.from(float32Array);
 
-              // ✅ 转换 `ArrayBuffer` 为 `Uint8Array`
-              const float32Array = new Float32Array(arrayBuffer);
+            const prob = await GalleryEngineService.calculateCosineSimilarity(tensorArray)
 
-              // ✅ 转换为 JS 数组（否则 Capacitor 不支持）
-              const tensorArray = Array.from(float32Array);
+            // TODO: show the result
+            // resultType: [1,0,0,0,0,0,0,...]
+            // invisiblize the img which corelation is less than 0.8
+            // for a turple, the first is the prob, the second is the image
 
-              const prob = await GalleryEngineService.calculateCosineSimilarity(tensorArray)
+            // 方法一：小于0.6的隐藏
+            // this.medias = this.medias.map((media, index) => {
+            //   if (prob[index] < 0.6) {
+            //     media.isHidden = true;
+            //   } else {
+            //     media.isHidden = false;
+            //   }
+            //   return media;
+            // });
+            // console.log(prob);
 
-              // TODO: show the result
-              // resultType: [1,0,0,0,0,0,0,...]
-              // invisiblize the img which corelation is less than 0.8
-              // for a turple, the first is the prob, the second is the image
-
-              // 方法一：小于0.6的隐藏
-              // this.medias = this.medias.map((media, index) => {
-              //   if (prob[index] < 0.6) {
-              //     media.isHidden = true;
-              //   } else {
-              //     media.isHidden = false;
-              //   }
-              //   return media;
-              // });
-              // console.log(prob);
-
-              // 方法二：将medias和prob看成整体，按照prob对应的大小、位置降序排序，取前五个设置isHidden为false，其余为true
-              const probWithIndex = prob.map((value, index) => ({ value, index }));
-              probWithIndex.sort((a, b) => b.value - a.value);
-              // console.log(probWithIndex);
-              this.searchMedias = [];
-              const right = Math.min(5, probWithIndex.length);
-              probWithIndex.slice(0, right).forEach((item) => {
-                this.searchMedias.push(this.medias[item.index]);
-              });
-
-              // 输出前10个
-              console.log(probWithIndex.slice(0, right));
-              console.log(this.searchMedias.slice(0, right));
-
+            // 方法二：将medias和prob看成整体，按照prob对应的大小、位置降序排序，取前五个设置isHidden为false，其余为true
+            const probWithIndex = prob.map((value, index) => ({ value, index }));
+            probWithIndex.sort((a, b) => b.value - a.value);
+            // console.log(probWithIndex);
+            this.searchMedias = [];
+            const right = Math.min(5, probWithIndex.length);
+            probWithIndex.slice(0, right).forEach((item) => {
+              this.searchMedias.push(this.medias[item.index]);
             });
-          }
-        } catch (error) {
-          console.error('Error:', error);
+
+            // 输出前10个
+            console.log(probWithIndex.slice(0, right));
+            console.log(this.searchMedias.slice(0, right));
+
+          });
         }
-        console.log("Search Done.");
-      },
+      } catch (error) {
+        console.error('Error:', error);
+      }
+      console.log("Search Done.");
+    },
 
     async showActionSheet(media: MediaItem) {
-        // show toast message media name
-        // toastController.create({
-        //   message: `id: ${media.id}\n <br/>type: ${media.type}\nwidth: ${media.width}\nheight: ${media.height}\nfileSize: ${media.fileSize}\n`,
-        //   duration: 2000,
-        // }).then((toast) => { toast.present(); })
-        let data: FullMediaItem;
+      const data = await GalleryPlus.getMedia({
+        id: media.id,
+        includeBaseColor: true,
+        includeDetails: true,
+        includePath: true,
+      });
 
-        // if (this.platform === 'android') {
-        //   if (media.id.startsWith('fakeid')) {
-        //     // base64 to blob image
-        //     // const blob = await fetch(media.thumbnail as string).then(r => r.blob());
-        //     data = {
-        //       id: media.id,
-        //       type: media.type,
-        //       width: media.width,
-        //       height: media.height,
-        //       fileSize: media.fileSize,
-        //       createdAt: media.createdAt,
-        //       thumbnail: media.thumbnail,
-        //       path: media.thumbnail
-        //     }
-        //   } else {
-        //     data = await GalleryPlus.getMedia({
-        //       id: media.id,
-        //       includeBaseColor: true,
-        //       includeDetails: true,
-        //       includePath: true,
-        //     });
-        //   }
-        // } else
-        {
-          data = await GalleryPlus.getMedia({
-            id: media.id,
-            includeBaseColor: true,
-            includeDetails: true,
-            includePath: true,
-          });
-        }
+      const modal = await modalController.create({
+        component: MediaInfoModalComponent,
+        componentProps: {
+          media: data
+        },
+        presentingElement: document.querySelector('.ion-page') as any
+      });
 
-        const modal = await modalController.create({
-          component: MediaInfoModalComponent,
-          componentProps: {
-            media: data
-          },
-          presentingElement: document.querySelector('.ion-page') as any
-        });
-
-        await modal.present();
-
-        // handleScroll(event: any) {
-        //   if (event.detail.scrollTop > 50) {
-        //     this.showSearchBar = false;
-        //   } else {
-        //     this.showSearchBar = true;
-        //   }
-        // }
-      }
+      await modal.present();
     }
-  };
+  }
+};
 
 
 </script>

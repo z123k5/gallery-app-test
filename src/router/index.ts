@@ -17,7 +17,7 @@ const routes: Array<RouteRecordRaw> = [
       },
       {
         path: 'tab1',
-        component: () => import('@/views/HomePage.vue')
+        component: () => import('@/views/CategoryPage.vue')
       },
       {
         path: 'tab2',
