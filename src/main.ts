@@ -30,6 +30,7 @@ import '@ionic/vue/css/display.css';
 /* @import '@ionic/vue/css/palettes/dark.always.css'; */
 /* @import '@ionic/vue/css/palettes/dark.class.css'; */
 import '@ionic/vue/css/palettes/dark.system.css';
+import { createPinia } from 'pinia';
 
 /* Theme variables */
 import './theme/variables.css';
@@ -47,9 +48,12 @@ defineCustomElements(window);
 customElements.define("jeep-sqlite", JeepSqlite);
 
 
+const pinia = createPinia();
+
 const app = createApp(App)
   .use(IonicVue)
-  .use(router);
+  .use(router)
+  .use(pinia);
 
 export const platform = Capacitor.getPlatform();
 // Set the platform as global properties on the app

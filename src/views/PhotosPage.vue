@@ -108,10 +108,13 @@ import { SQLiteDBConnection } from '@capacitor-community/sqlite';
 // Plugin tflite cosines calc
 import { GalleryEngineService } from '../implements/GalleryEngine';
 
+import { useMediaStore } from '@/store/mediaStore';
+
 export default {
   name: 'PhotosPage',
   components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
   emits: ['onClick'],
+  
   setup() {
     const appInstance = getCurrentInstance();
     const sqliteServ: SQLiteService = appInstance?.appContext.config.globalProperties.$sqliteServ;
@@ -173,6 +176,10 @@ export default {
       if (this.medias && this.medias.length > 0)
         await GalleryEngineService.loadTensorFromDB();
       console.log("onmounted done");
+      toastController.create({
+        message: '加载完成',
+        duration: 2000,
+      }).then((toast) => { toast.present(); })
     });
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
@@ -715,8 +722,11 @@ export default {
             includeDetails: true, // TODO: edit
             includeBaseColor: false,
           })
-          this.medias = result.media
+          this.medias = result.media;
 
+          // Save medias to Vuex Store
+          const mediaStore = useMediaStore();
+          mediaStore.setMedias(this.medias);
 
           for (const media of this.medias) {
             if (media.name === undefined) {
