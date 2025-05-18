@@ -43,6 +43,8 @@ import StorageService from './implements/StorageService';
 import InitializeAppService from './implements/initializeAppService';
 import { JeepSqlite } from 'jeep-sqlite/dist/components/jeep-sqlite';
 import { GalleryEngineService } from './implements/GalleryEngine';
+import { GalleryDuplicateService } from './implements/GalleryDuplicateService';
+import { PhotosPageService } from './implements/PhotosPageService';
 
 defineCustomElements(window);
 customElements.define("jeep-sqlite", JeepSqlite);
@@ -61,12 +63,15 @@ app.config.globalProperties.$platform = platform;
 // Define and instantiate the required services
 const sqliteServ = new SqliteService();
 const dbVersionServ = new DbVersionService();
-const storageServ = new StorageService(sqliteServ, dbVersionServ);
+const storageServ = new StorageService(sqliteServ, dbVersionServ, );
+const galleryDuplicateServ = new GalleryDuplicateService(storageServ);
 // Set the services as global properties on the app
 app.config.globalProperties.$sqliteServ = sqliteServ;
 app.config.globalProperties.$dbVersionServ = dbVersionServ;
 app.config.globalProperties.$storageServ = storageServ;
+app.config.globalProperties.$galleryDuplicateServ = galleryDuplicateServ;
 app.config.globalProperties.$galleryEngine = new GalleryEngineService();
+app.config.globalProperties.$photosPageService = new PhotosPageService(storageServ, galleryDuplicateServ, sqliteServ);
 //Define and instantiate the InitializeAppService
 const initAppServ = new InitializeAppService(sqliteServ, storageServ);
 

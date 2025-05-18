@@ -8,11 +8,24 @@ export interface UserDO {
 
 export interface MediaDO {
     identifier: string; // Media Identifier
-    name: string;
-    type: "image" | "video";
+    name: string | undefined;
+    type: "image" | "video" | undefined;
     created_at: number;
-    thumbnail: string;
-    feature: Blob; // Feature
-    processStep: number; // Process Step, 0: Not Processed, 1: Uploaded, 2: calculated
+    modified_at: number;
+    thumbnailV1Path: string;
+    thumbnailV2Path: string | undefined;
+    source: string | undefined; // local gallery or cloud
+    isDeleted: number | undefined;
+    processInfo: number; // Process bits, binary, bit0: uploaded & featured & catgoried & metaData, bit1: phashed, bit2: uploading, bit3: not processable
+    feature: Blob | undefined; // Feature
+    phash: string | undefined;
+}
 
+export interface MediaMetaDataDO {
+    media_id: string;
+    timestamp: number;
+    exif_lat: number | undefined;
+    exif_lon: number | undefined;
+    exif_dev: string | undefined;
+    location: string | undefined;
 }

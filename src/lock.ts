@@ -5,7 +5,7 @@ class Lock {
   private queue: { type: LockType | 'r+'; resolve: (lock: any) => void }[] = [];
   private currentLock: { type: LockType; count: number | null } | null = null;
   private state: LockState = { msg: '', data: null };
-  private hasRPlus: Boolean = false;
+  private hasRPlus: boolean = false;
   /**
    * 请求一个锁，并返回一个Promise，该Promise解析为包含解锁方法、设置方法和锁类型的对象。你必须及时调用其中的unlock方法来释放锁，否则锁会卡死。
    * - 读锁本质上不是互斥的，场上可以同时存在多个读锁和一个写锁，场上不能同时存在多个写锁或读写锁，场上存在读写锁时，其他锁均会被锁定（这与大部分只理解读/写锁的ai的理解不同，这里的逻辑为读尽量不阻塞，除非遇到读写锁）。

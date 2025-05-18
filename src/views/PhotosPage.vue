@@ -1,1099 +1,450 @@
 <template>
-  <ion-page>
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>图库</ion-title>
-      </ion-toolbar>
-    </ion-header>
-    <ion-content :fullscreen="true">
+    <ion-page>
+        <ion-header>
+            <ion-toolbar>
+                <ion-title>图库</ion-title>
+            </ion-toolbar>
+            <ion-searchbar :value="queryString" @keyup.enter="handleSearch($event)" @ionClear="handleClearSearch"
+                placeholder="搜索图片"></ion-searchbar>
+        </ion-header>
+        <ion-content :fullscreen="true">
 
-      <ion-header collapse="condense">
-        <ion-toolbar>
-          <ion-title size="large">图库</ion-title>
-        </ion-toolbar>
-      </ion-header>
 
-      <!-- 自动隐藏的搜索框 -->
-      <ion-searchbar :debounce="1000" :value="queryString" @keyup.enter="handleSearch($event)"
-        placeholder="搜索图片"></ion-searchbar>
-      <br />
+            <ion-header collapse="condense">
+                <ion-toolbar>
+                    <ion-title size="large">按日期排序</ion-title>
+                </ion-toolbar>
+            </ion-header>
 
-      <p> Identicons Generate </p>
-      <ion-button @click="MakeMediaData"> Generate 25 Images </ion-button>
+            <p v-if="displaySearchResult"> {{ searchResult }} </p>
 
-      <p> Query All </p>
-      <ion-button @click="QueryAll"> Query All </ion-button>
+            <ion-list>
+                <ion-item v-for="media in visibleMedias" :key="media.id" @click="showActionSheet(media)" :button="true">
+                    <ion-thumbnail slot="start">
+                        <img loading="lazy" :src="media.thumbnailV1" />
+                    </ion-thumbnail>
+                    <ion-label>
+                        <h3>{{ media.name }}</h3>
+                        <p><ion-icon :icon="calendarOutline"></ion-icon> {{ new
+                            Date(media.createdAt).toLocaleDateString('zh-CN') }}</p>
+                        <!-- Analyze pending, analyze done, not analyzed -->
+                        <ion-icon v-if="getVisibleMediaDOById(media.id)" :icon="(getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 1
+                            ? checkmarkCircleOutline
+                            : (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 8
+                                ? removeCircleOutline
+                                : (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 4
+                                    ? syncOutline
+                                    : null
+                            " :class="{
+                                'rotating': (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 4
+                            }">
+                        </ion-icon>
+                        <ion-icon v-if="getVisibleMediaDOById(media.id)?.source?.startsWith('cloud')"
+                            :icon="cloudOutline"></ion-icon>
+                    </ion-label>
+                    <ion-note color="medium" slot="end">{{ media.fileSize ? (
+                        media.fileSize < 1024 ? (media.fileSize + ' B' ) : media.fileSize < 1048576 ? ((media.fileSize /
+                            1024).toFixed(2) + ' KB' ) : ((media.fileSize / (1024 * 1024)).toFixed(2) + ' MB' )) : "未知"
+                            }}</ion-note>
+                </ion-item>
+            </ion-list>
 
-      <p> Photos & videos </p>
 
-      <div id="photo-wall" class="photo-wall">
-        <div v-for="media in visibleMedias" :key="media.id" class="photo-item" @click="showActionSheet(media)"
-          oading="lazy" :style="{ backgroundImage: 'url(' + media.thumbnail + ')' }">
-          <div v-if="media.type === 'video'"
-            style="position: absolute; bottom: 5px; left: 5px; color: white; background-color: rgba(0, 0, 0, 0.5); padding: 2px 5px; border-radius: 3px; font-size: 10px">
-            <ion-icon :icon="videocam"></ion-icon>
-          </div>
-        </div>
-      </div>
+            <ion-infinite-scroll :disabled="displaySearchResult" @ionInfinite="onIonInfinite" threshold="100px"
+                position="bottom">
+                <ion-infinite-scroll-content loadingSpinner="bubbles" loadingText="Loading more data...">
+                </ion-infinite-scroll-content>
+            </ion-infinite-scroll>
 
-      <!-- <ion-grid>
-        <ion-row>
-          <ion-col :size="colSize" v-for="media in medias" :key="media">
-
-            <ion-img :src="media.thumbnail" @click="showActionSheet(media)" accept="image/*" />
-            <div v-if="media.type === 'video'"
-              style="position: absolute; bottom: 5px; left: 5px; color: white; background-color: rgba(0, 0, 0, 0.5); padding: 2px 5px; border-radius: 3px; font-size: 10px">
-              <ion-icon :icon="videocam"></ion-icon>
-            </div>
-          </ion-col>
-        </ion-row>
-      </ion-grid> -->
-
-      <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-        <ion-fab-button @click="takePhotoAction()">
-          <ion-icon :icon="camera"></ion-icon>
-        </ion-fab-button>
-      </ion-fab>
-
-      <ion-fab vertical="bottom" horizontal="start" slot="fixed">
-        <ion-fab-button>
-          <ion-icon :icon="images"></ion-icon>
-        </ion-fab-button>
-      </ion-fab>
-
-    </ion-content>
-  </ion-page>
+        </ion-content>
+    </ion-page>
 </template>
 
-
 <script lang="ts">
-import { camera, videocam, images } from 'ionicons/icons';
+import { camera, videocam, images, calendarOutline, syncOutline, removeCircleOutline, checkmarkCircleOutline, cloudOutline } from 'ionicons/icons';
 import {
-  IonPage,
-  IonHeader,
-  IonFab,
-  IonFabButton,
-  IonButton,
-  IonIcon,
-  IonToolbar,
-  IonTitle,
-  IonContent,
-  // IonGrid,
-  // IonRow,
-  // IonCol,
-  // IonImg,
-  IonSearchbar,
-  modalController,
-  toastController,
-  // IonThumbnail,
-  // GestureDetail,
+    IonPage,
+    IonHeader,
+    IonFab,
+    IonFabButton,
+    // IonButton,
+    IonIcon,
+    IonToolbar,
+    IonTitle,
+    IonContent,
+    IonItem,
+    IonLabel,
+    IonNote,
+    // IonGrid,
+    // IonRow,
+    // IonCol,
+    // IonImg,
+    IonSearchbar,
+    modalController,
+    toastController,
+    IonInfiniteScroll,
+    IonInfiniteScrollContent,
+    IonList,
+    IonThumbnail,
+    InfiniteScrollCustomEvent,
+    // GestureDetail,
 } from '@ionic/vue';
-import { ref, getCurrentInstance, computed } from 'vue';
-import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera";
-import { GalleryPlus, MediaItem, FullMediaItem } from 'capacitor-gallery-plus';
-import { Media } from '@capacitor-community/media'
-import { Capacitor, CapacitorException, CapacitorCookies } from "@capacitor/core";
-import CryptoJS from 'crypto-js';
-import * as jdenticon from 'jdenticon';
+import { getCurrentInstance, Ref, ref } from 'vue';
+// import { Camera, CameraResultType, CameraSource, Photo } from "@capacitor/camera";
+import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
+// import { Media } from '@capacitor-community/media'
+import MediaInfoModalComponent from '@/components/MediaInfoModalComponent.vue';
 
-// Local Database
-import { UserDO } from '@/components/models';
-import StorageService from '@/implements/StorageService';
-import MediaInfoModalComponent from '../components/MediaInfoModalComponent.vue';
-// import Compressor from 'compressorjs';
-import SQLiteService from '@/implements/SqliteService';
-import { SQLiteDBConnection } from '@capacitor-community/sqlite';
-
-
-// Plugin tflite cosines calc
-import { GalleryEngineService } from '../implements/GalleryEngine';
-
-import { useMediaStore } from '@/store/mediaStore';
+import { StorageService } from '../implements/StorageService';
+import { PhotosPageService } from '@/implements/PhotosPageService';
+import { ISQLiteService } from '@/implements/SqliteService';
+// import { GalleryEngineService } from '@/implements/GalleryEngine';
+import { GalleryDuplicateService } from '@/implements/GalleryDuplicateService';
+import { MediaDO } from '@/components/models';
+import { Capacitor } from '@capacitor/core';
 
 export default {
-  name: 'PhotosPage',
-  components: { IonPage, IonHeader, IonFab, IonFabButton, IonButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar },
-  emits: ['onClick'],
-  
-  setup() {
-    const appInstance = getCurrentInstance();
-    const sqliteServ: SQLiteService = appInstance?.appContext.config.globalProperties.$sqliteServ;
-    const storageServ: StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
-    const galleryEngineServ: GalleryEngineService = appInstance?.appContext.config.globalProperties.$galleryEngineServ;
+    name: 'PhotosPage',
+    components: { IonPage, IonHeader, IonFab, IonFabButton, IonIcon, IonToolbar, IonTitle, IonContent, IonSearchbar, IonInfiniteScroll, IonInfiniteScrollContent, IonList, IonItem, IonLabel, IonNote, IonThumbnail },
+    emits: ['onClick'],
+    setup() {
+        const appInstance = getCurrentInstance();
+        const sqliteService: ISQLiteService = appInstance?.appContext.config.globalProperties.$sqliteServ;
+        const storageService: StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
+        // const galleryEngineServ: GalleryEngineService = appInstance?.appContext.config.globalProperties.$galleryEngineServ;
+        const galleryDuplicateService: GalleryDuplicateService = appInstance?.appContext.config.globalProperties.$galleryDuplicateServ;
+        const photosPageService: PhotosPageService = appInstance?.appContext.config.globalProperties.$photosPageService;
+        const platform = sqliteService.getPlatform();
 
-    const dbNameRef = ref('');
-    const isInitComplete = ref(false);
-    const isDatabase = ref(false);
-    const users = ref<UserDO[]>([]);
+        photosPageService.startPrefetchService();
+        photosPageService.startMediaUploadService();
+        photosPageService.startPHashComputeService();
+        photosPageService.startAutoCleanService();
 
-    const db = ref<SQLiteDBConnection | null>(null); // Initialize db as null
-    const dbInitialized = computed(() => !!db.value);
-    const platform = sqliteServ.getPlatform();
-
-    const tags = ["人物", "动物", "植物", "食物", "建筑", "家具", "交通工具", "电子产品", "服装", "乐器", "屏幕截图"];
-
-    // Open Database
-    const openDatabase = async () => {
-      try {
-        const dbUsersName = storageServ.getDatabaseName();
-        dbNameRef.value = dbUsersName;
-        const version = storageServ.getDatabaseVersion();
-
-        const database = await sqliteServ.openDatabase(dbUsersName, version, false);
-        db.value = database;
-        isDatabase.value = true;
-      } catch (error) {
-        const msg = `Error open database: ${error}`;
-        console.error(msg);
-        toastController.create({
-          message: msg,
-          duration: 2000,
-          cssClass: 'newline',
-        }).then((toast) => { toast.present(); })
-      }
-    };
-
-    return {
-      camera, images, videocam,
-      galleryEngineServ, sqliteServ, storageServ, db, dbInitialized, platform, openDatabase,
-      isInitComplete, dbNameRef, isDatabase, users, tags
-    }
-  },
-  computed: {
-    visibleMedias() {
-      if (this.displaySearchResult)
-        // return this.searchMedias.filter(media => !media.isHidden);
-        return this.searchMedias;
-      else
-        // return this.medias.filter(media => !media.isHidden);
-        return this.medias;
-    }
-  },
-  mounted() {
-    this.storageServ.setTagsListCache(this.tags);
-    this.getMedia().then(async () => {
-      await this.uploadAndFetchCalculateResults();
-      if (this.medias && this.medias.length > 0)
-        await GalleryEngineService.loadTensorFromDB();
-      console.log("onmounted done");
-      toastController.create({
-        message: '加载完成',
-        duration: 2000,
-      }).then((toast) => { toast.present(); })
-    });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const initSubscription = this.storageServ.isInitCompleted.subscribe(async (value: boolean) => {
-      this.isInitComplete = value;
-      if (this.isInitComplete === true) {
-        // const dbUsersName = this.storageServ.getDatabaseName();
-        if (this.platform === "web") {
-          customElements.whenDefined('jeep-sqlite').then(async () => {
-            await this.openDatabase();
-          }).catch((error) => {
-            const msg = `Error open database: ${error}`;
-            console.log(msg);
-            toastController.create({
-              message: msg,
-              duration: 2000,
-            }).then((toast) => { toast.present(); })
-          });
-        } else {
-          await this.openDatabase();
+        return {
+            storageService, photosPageService, galleryDuplicateService,
+            toastController,
+            camera, videocam, images, calendarOutline, syncOutline, removeCircleOutline, checkmarkCircleOutline, cloudOutline,
+            platform
         }
-      }
-    });
-
-    // 添加触摸手势支持
-    // let scale = 1;  // 缩放比例
-    // let startDistance = 0;
-    // const photoItems = document.querySelectorAll<HTMLElement>('.photo-item');
-    const photoWall = document.getElementById('photo-wall');
-    if (photoWall) {
-      console.log('event ok');
-
-      // photoWall.addEventListener('touchstart', (e) => {
-      //   console.log('touchstart');
-      //   if (e.touches.length === 2) {
-      //     startDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      //   }
-      // });
-
-      // photoWall.addEventListener('touchmove', (e) => {
-      //   if (e.touches.length === 2) {
-      //     const endDistance = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-      //     const scaleChange = startDistance / endDistance;
-      //     this.scale *= 1 / scaleChange;
-      //     startDistance = endDistance;
-      //     updateLayout();
-      //   }
-      // });
-
-
-      // const updateLayout = () => {
-      //   console.log('updateLayout');
-      //   if (this.scale < 1) {
-      //     this.scale = 1;
-      //   }
-
-      //   if (this.scale > 10) {
-      //     this.scale = 10;  // 限制最大放大比例
-      //   }
-
-      //   // 动态调整网格每行的列数
-      //   const numColumns = Math.max(1, Math.floor(this.scale / 10)); // 根据缩放比例计算每行的列数
-      //   photoWall.style.gridTemplateColumns = `repeat(${numColumns}, 1fr)`;  // 设置动态列数
-
-      //   // 调整每个图片的大小
-      //   photoItems.forEach(item => {
-      //     item.style.transform = `scale(${this.scale})`;  // 图片缩放
-      //   });
-      // }
-
-      // 可选：点击重置缩放比例
-      // photoWall.addEventListener('click', () => {
-      //   console.log('click');
-      //   this.scale = 1;
-      //   updateLayout();
-      // });
-    }
-    // this.getMedia();
-  },
-  beforeMount() {
-    this.sqliteServ.closeDatabase(this.dbNameRef, false)
-      .then(() => {
-        this.isDatabase = false;
-      }).catch((error: any) => {
-        const msg = `Error close database:
-                            ${error.message ? error.message : error}`;
-        console.error(msg);
-        toastController.create({
-          message: msg,
-          duration: 2000,
-        }).then((toast) => { toast.present(); })
-      });
-  },
-  data(): { medias: MediaItem[]; searchMedias: MediaItem[]; displaySearchResult: boolean; queryString: string; highQualityPath?: string; showSearchBar: boolean, photos: Photo[], scale: number, serverUrl: string, databaseTensorShouldBeReload: boolean } {
-    return {
-      medias: [], // 存储所有媒体
-      searchMedias: [], // 存储搜索结果
-      displaySearchResult: false, // 是否显示搜索结果
-      queryString: '', // 搜索关键字
-      photos: [],
-      highQualityPath: undefined, // 高质量图像路径
-      showSearchBar: true,
-      scale: 1,
-      serverUrl: 'https://frp-dad.com:34952', // frp Server
-      // serverUrl: 'http://10.12.80.224:8443',
-      databaseTensorShouldBeReload: false,
-    };
-  },
-  watch: {
-    medias() {
-      this.highQualityPath = undefined; // 当 medias 更新时，重置高质量路径
     },
-  },
-  methods: {
-
-    /**
-     * Media
-     */
-    // 根据哈希生成 Identicon 的 Base64 字符串
-    generateBase64Identicon(hash: string) {
-      // 创建一个 canvas 元素
-      const canvas = document.createElement('canvas');
-
-      // 使用 jdenticon 更新 canvas 内容
-      jdenticon.update(canvas, hash);
-
-      // 将 canvas 内容转换为 base64 字符串
-      return canvas.toDataURL();
-    },
-    async MakeMediaData() {
-      for (let i = 0; i < 25; i++) {
-        // data: base64 encoded image data
-        // 
-        const hash = CryptoJS.MD5("key" + i).toString(CryptoJS.enc.Hex);
-
-        const thumbnail = this.generateBase64Identicon(hash)
-        this.medias.push({
-          id: `fakeid-${i}`,
-          type: 'image',
-          createdAt: new Date().getMilliseconds(),
-          baseColor: '#000000',
-          name: `fake-image-${i}`,
-          width: 100,
-          height: 100,
-          thumbnail: thumbnail,
-          fileSize: thumbnail.length,
-          // path: `fake-image-${i}`,
-          mimeType: 'image/jpeg',
-          isHidden: false,
-        }
-        )
-      }
-
-      // save to database
-      await this.saveMediaToDatabase();
-
-      // upload to server
-      await this.uploadAndFetchCalculateResults();
-
-      // Load Tensor
-      await GalleryEngineService.loadTensorFromDB();
-
-      toastController.create({
-        message: 'Media data created: ' + this.medias.length + "first is " + this.medias[0].thumbnail?.substring(0, 20),
-        duration: 2000,
-      }).then((toast) => { toast.present(); })
-    },
-
-    // Async save to database
-    async saveMediaToDatabase() {
-      if (this.medias && this.medias.length === 0) {
-        console.log('No need to save to DB, medias is empty');
-        return;
-      }
-      for (const media of this.medias) {
-        try {
-          if (media.thumbnail) {
-            const base64 = await this.readUriAsBlobImage(media.thumbnail as string)
-            media.thumbnail = base64.base64
-          } else {
-            console.log('media.thumbnail is null: ');
-            console.log(media);
-          }
-          await this.storageServ.addMedia({
-            identifier: media.id,
-            type: media.type,
-            created_at: media.createdAt,
-            name: media.name ?? 'undefined',
-            thumbnail: media.thumbnail ?? 'undefined',
-            processStep: 0,
-            feature: new Blob,
-          })
-        } catch (error) {
-          console.log('Error saving media:', error)
-        }
-      }
-    },
-    // Async upload to server and fetch calculate results to db
-    async uploadAndFetchCalculateResults() {
-      // Get token from cookie
-      let token = this.getCookie('token');
-
-      if (token === null) {
-        token = await this.performLogin();
-      } else {
-        // check token
-        const response = await fetch(`${this.serverUrl}/users/active`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-        })
-
-        if (response.status === 401) {
-          // Token is invalid, perform login
-          const token = await this.performLogin();
-          if (token !== null) {
-            this.setCookie('token', token);
-          } else {
-            toastController.create({
-              message: 'Login failed',
-              duration: 2000,
-            }).then((toast) => { toast.present(); })
-          }
-        }
-      }
-
-      if (this.medias && this.medias.length === 0) {
-        console.log('No need to upload, medias is empty');
-        return;
-      }
-
-      // 逐个上传文件
-      for (const media of this.medias) {
-        let blob: Blob | null = null;
-        const formData: FormData = new FormData();
-        try {
-          // query db, if in database and processStep is 2, skip
-          const processStep: number | undefined = await this.storageServ.getMediaProcessStepByIndentifier(media.id);
-          if (processStep === 2) {
-            continue;
-          }
-
-          // Check if media is fake
-          if (media.id.startsWith('fakeid')) {
-            // base64 to blob image
-            const blob = await fetch(media.thumbnail as string).then(r => r.blob());
-            // fetch upload
-            const formData = new FormData();
-            formData.append("file", blob, "image.png");  // 传标准文件名
-            // this.tags.forEach(tag => {
-            //   formData.append("tags", tag); // 多次添加同名字段实现数组
-            // });
-            formData.append("tags", JSON.stringify(this.tags));
-
-            const responseBin = await fetch(this.serverUrl + '/engine/resolve', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + token,
-                'Accept': 'application/json'
-              },
-              body: formData
-            });
-
-            if (responseBin.ok) {
-              const responseJson = (await responseBin.json())
-              const encoded_data = responseJson["feat"]
-
-              const decodedData = atob(encoded_data);
-              const arrayBuffer = new ArrayBuffer(decodedData.length);
-              const uint8Array = new Uint8Array(arrayBuffer);
-              // 将二进制数据填充到 Uint8Array
-              for (let i = 0; i < decodedData.length; i++) {
-                uint8Array[i] = decodedData.charCodeAt(i);
-              }
-
-              // 存入数据库
-              await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
-              // if (await this.storageServ.getMediaTagCountsByIndentifier(media.id) === 0) {
-              const tags = responseJson["tags"]
-              if (tags && tags.length > 0) {
-                await this.storageServ.addTagToMedia(media.id, responseJson["tags"]);
-              }
-            } else {
-              console.error('Error uploading media:', responseBin.statusText);
-            }
-
-          } else {
-            const fullMedia = await GalleryPlus.getMedia({ id: media.id, includePath: true, includeBaseColor: false, includeDetails: false });
-
-            const mediaWebSrc = Capacitor.convertFileSrc(fullMedia.path ?? "")
-            // if media is video dump a frame
-            if (media.type === 'video') {
-              const video = document.createElement('video');
-              video.src = mediaWebSrc;
-              video.load();
-              video.currentTime = 0;
-              video.width = 100;
-              video.height = 100;
-              video.crossOrigin = 'anonymous';
-              video.play();
-              video.pause();
-              const canvas = document.createElement('canvas');
-              canvas.width = video.width;
-              canvas.height = video.height;
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                ctx.drawImage(video, 0, 0, video.width, video.height);
-                blob = await new Promise((resolve, reject) => {
-                  canvas.toBlob((b) => {
-                    if (b)
-                      resolve(b);
-                    else reject(new Error("Failed to generate blob from canvas"));
-                  }, 'image/jpeg', 0.8);
-                });
-              }
-            } else {
-              const responseFile = await fetch(mediaWebSrc);
-              blob = await responseFile.blob();
-            }
-            // 压缩文件
-            // new Compressor(blob, {
-            //   quality: 1.0,
-            //   // maxWidth: 800,
-            //   // maxHeight: 800,
-            //   convertTypes: ['image/jpeg'],
-            //   success: async (result) => {
-            //     formData.append("file", result, "image.png");
-
-            //     await fetch(this.serverUrl + '/engine/resolve', {
-            //       method: 'POST',
-            //       headers: {
-            //         'Authorization': 'Bearer ' + token,
-            //       },
-            //       body: formData
-            //     }).then(async (response: Response) => {
-            //       if (response.ok) {
-            //         const encoded_data = (await response.json())["feat"]
-            //         const decodedData = atob(encoded_data);
-            //         const arrayBuffer = new ArrayBuffer(decodedData.length);
-            //         const uint8Array = new Uint8Array(arrayBuffer);
-            //         // 将二进制数据填充到 Uint8Array
-            //         for (let i = 0; i < decodedData.length; i++) {
-            //           uint8Array[i] = decodedData.charCodeAt(i);
-            //         }
-            //         try {
-            //           await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
-            //           console.log('updateMediaByIdentifier success');
-            //         } catch (error) {
-            //           console.error('Failed to save result to database:', error);
-            //         }
-            //       } else {
-            //         console.error('Error uploading media:', response.statusText);
-            //         if (response.status === 400) {
-            //           response.json().then(data => {
-            //             console.error('Server validation errors:', data);
-            //           });
-            //         }
-            //       }
-            //     }).catch(error => {
-            //       console.error('Network error:', error);
-            //     });
-            //   },
-            //   error: (err) => {
-            //     console.error(`Error compressing file ${media.name}:`, err.message);
-            //   },
-            // });
-
-            if (!blob) {
-              console.error('Failed to get blob from media:', media);
-              continue;
-            }
-
-            // 不压缩文件
-            formData.append("file", blob, "image.png");
-            formData.append("tags", JSON.stringify(this.tags));
-            console.log('formData:', formData.get('tags'));
-            const response = await fetch(this.serverUrl + '/engine/resolve', {
-              method: 'POST',
-              headers: {
-                'Authorization': 'Bearer ' + token,
-                'Accept': 'application/json'
-              },
-              body: formData
-            });
-
-            if (response.ok) {
-              const responseJson = (await response.json())
-              const encoded_data = responseJson["feat"]
-              const decodedData = atob(encoded_data);
-              const arrayBuffer = new ArrayBuffer(decodedData.length);
-              const uint8Array = new Uint8Array(arrayBuffer);
-              // 将二进制数据填充到 Uint8Array
-              for (let i = 0; i < decodedData.length; i++) {
-                uint8Array[i] = decodedData.charCodeAt(i);
-              }
-              try {
-                await this.storageServ.updateMediaByIdentifier(media.id, 2, arrayBuffer);
-                const resultTags = responseJson["tags"]
-                if (resultTags.length > 0) {
-                  await this.storageServ.addTagToMedia(media.id, resultTags);
-                }
-                console.log('updateMediaByIdentifier success');
-              } catch (error) {
-                console.error('Failed to save result to database:', error);
-              }
-            } else {
-              console.error('Error uploading media:', response.statusText);
-              if (response.status === 400) {
-                response.json().then(data => {
-                  console.error('Server validation errors:', data);
-                });
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Error uploading media:', error);
-        }
-      }
-    },
-
-    async getMedia() {
-      // const imagesUris = [
-      //   './temp/_DSC2035.JPG',
-      //   './temp/_DSC2056.JPG',
-      //   './temp/_DSC2807.JPG',
-      //   './temp/_DSC2808.JPG',
-      //   './temp/_DSC2809.JPG',
-      //   './temp/_DSC2845.JPG',
-      //   './temp/_DSC2848.JPG',
-      //   './temp/_DSC2851.JPG',
-      //   './temp/_DSC2852.JPG',
-      //   './temp/_DSC2857.JPG',
-      // ]
-      this.medias = []
-      // if (this.platform == "android") {
-      //   // from database
-      //   const resultdb = await this.storageServ.getMedias();
-      //   resultdb.forEach(async (media) => {
-      //     this.medias.push({
-      //       id: media.identifier,
-      //       type: media.type,
-      //       createdAt: media.created_at,
-      //       baseColor: '#000000',
-      //       name: media.name,
-      //       width: 100,
-      //       height: 100,
-      //       thumbnail: media.thumbnail,
-      //       fileSize: media.thumbnail.length,
-      //       // path: `fake-image-${i}`,
-      //       mimeType: 'image/jpeg',
-      //       isHidden: false,
-      //     }
-      //     )
-      //   });
-      //   if (this.medias.length > 0) {
-      //     return;
-      //   }
-
-      //   // If Empty, load photo by fetch from public/temp/*.JPG
-      //   this.medias = (await Promise.all(imagesUris.map(url => fetch(url)
-      //     .then(response => response.blob())
-      //     .then(blob => new Promise((resolve, reject) => {
-      //       new Compressor(blob, {
-      //         quality: 0.8, // 压缩质量
-      //         width: 800,
-      //         height: 800,
-      //         convertTypes: ['image/jpeg'],
-      //         success(result) {
-      //           resolve(URL.createObjectURL(result));
-      //         },
-      //         error(err) {
-      //           console.log(err.message);
-      //           reject(err);
-      //         },
-      //       });
-      //     })))) as string[]
-      //   ).map((img, index) => ({
-      //     id: `fakeid-${index}`,
-      //     type: 'image',
-      //     createdAt: new Date().getMilliseconds(),
-      //     thumbnail: img,
-      //     baseColor: '#000000',
-      //     name: `fake-image-${index}`,
-      //     width: 100,
-      //     height: 100,
-      //     fileSize: img.length,
-      //     mimeType: 'image/jpeg',
-      //   }));
-
-
-
-      //   // TODO: Not Implemented
-      //   // const result = (await Media.getMedias({})).medias;
-      //   // // Map MediaAsset[] to MediaItem[]
-      //   // this.medias = result.map((result) => {
-      //   //   const mediaItem: MediaItem = {
-      //   //     id: result.identifier,
-      //   //     name: result.identifier,
-      //   //     type: result.duration ? "video" : "image",
-      //   //     createdAt: new Date(result.creationDate).getTime(),
-      //   //     thumbnail: result.data,
-      //   //     width: result.fullWidth,
-      //   //     height: result.fullHeight,
-      //   //     mimeType: result.duration ? "video/mp4" : "image/jpeg",
-      //   //   };
-      //   //   return mediaItem;
-      //   // });
-
-      // } else
-      {
-        const checkPermission = async () => {
-          const permission = await GalleryPlus.checkPermissions();
-
-          if (permission.status !== "granted") {
-            const request = await GalleryPlus.requestPermissions();
-
-            if (request.status !== "granted") {
-              toastController.create({
-                message: "Gallery Permission denied, please allow access.",
-                duration: 5000
-              }).then(toast => toast.present());
-              console.error("Permission denied.");
-            } else {
-              toastController.create({
-                message: "Gallery Permission granted.",
-                duration: 2000
-              }).then(toast => toast.present());
-            }
-          }
-        }
-        checkPermission();
-        try {
-          this.medias = []
-          const result = await GalleryPlus.getMediaList({
-            limit: 200,
-            type: 'all',
-            thumbnailSize: 200,
-            sort: 'newest',
-            includeDetails: true, // TODO: edit
-            includeBaseColor: false,
-          })
-          this.medias = result.media;
-
-          // Save medias to Vuex Store
-          const mediaStore = useMediaStore();
-          mediaStore.setMedias(this.medias);
-
-          for (const media of this.medias) {
-            if (media.name === undefined) {
-              media.name = media.id;
-            }
-            if (media.thumbnail) {
-              media.thumbnail = Capacitor.convertFileSrc(media.thumbnail as string)
-            } else {
-              // const { base64 } = await this.readUriAsBlobImage(media.path)
-              console.log('media.thumbnail is null: ');
-              console.log(media);
-              // media.thumbnail = base64
-            }
-          }
-
-          // store to database
-          this.storageServ.autoAddOrDeleteMedia(this.medias);
-          // for (const media of this.medias) {
-          //   try {
-          //     await this.storageServ.addMedia({
-          //       identifier: media.id,
-          //       type: media.type,
-          //       created_at: media.createdAt,
-          //       name: media.name!,
-          //       thumbnail: media.thumbnail!,
-          //       processStep: 0,
-          //       feature: new Blob,
-          //     })
-          //   } catch (error) {
-          //     console.log('Error saving media:', error)
-          //   }
-          // }
-        } catch (error) {
-          toastController.create({
-            message: 'Error retrieving media: ' + error,
-            duration: 2000,
-          }).then((toast) => { toast.present(); })
-          console.error('Error retrieving media:', error)
-        }
-      }
-    },
-
-    async QueryAll() {
-      const result = await this.storageServ.getMedias();
-      console.log(result);
-      toastController.create({
-        message: 'Query all media: ' + this.medias.length,
-        duration: 2000,
-      }).then((toast) => { toast.present(); })
-    },
-
-    /**
-     * Browser
-     */
-    getCookies() {
-      return document.cookie;
-    },
-    getCookie(key: string) {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.startsWith(key + '=')) {
-          return cookie.substring(key.length + 1);
-        }
-      }
-      return null;
-    },
-    setCookie(key: string, value: string) {
-      document.cookie = key + '=' + value;
-    },
-    async deleteCookie(key: string) {
-      const url = this.serverUrl;
-      await CapacitorCookies.deleteCookie({
-        url: url,
-        key: key
-      });
-    },
-    // zoomIn() {
-    //   this.scale += 1.5;
-    //   if (this.scale > 3) {
-    //     this.scale = 3;  // 限制最大放大比例
-    //   }
-    // },
-
-    // zoomOut() {
-    //   this.scale -= 1.5;
-    //   if (this.scale < 1) {
-    //     this.scale = 1;  // 限制最大放大比例
-    //   }
-    // },
-
-    /**
-     * Actions
-     */
-    async performLogin(): Promise<string> {
-      try {
-        const formData = new URLSearchParams();
-        formData.append('username', 'admin');
-        formData.append('password', 'admin');
-        const response = await fetch(this.serverUrl + '/users/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData
-        });
-        const data = await response.json();
-        return data.access_token;
-      } catch (error) {
-        console.error('Error:', error);
-        return '';
-      }
-    },
-
-    async readUriAsBlobImage(uri: string) {
-      if (!uri) {
-        return { base64: '', width: 0, height: 0 };
-      }
-
-      if (this.platform === 'android') {
-        // In Android ,fetch file is not available
-
-      }
-
-      const response = await fetch(uri)
-      const blob = await response.blob();
-
-      return new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          if (typeof reader.result === 'string') {
-            const img = new Image();
-            img.onload = () => {
-              resolve({
-                base64: reader.result as string,
-                width: img.width,
-                height: img.height,
-              });
-            };
-            img.onerror = () => reject(new Error('无法获取图片尺寸'));
-            img.src = reader.result;
-          } else {
-            reject(new Error('无法获取 Base64 字符串'));
-          }
+    data(): {
+        serverUrl: string,
+        displaySearchResult: boolean,
+        queryString: string,
+        colSize: number,
+        start: number,
+        limit: number,
+        dis: boolean,
+        searchMediasItemList: Ref<MediaItem[]>,
+        searchResult: string,
+        // modalController,
+        // toastController,
+        // IonIcon,
+        // IonButton,
+        // IonImg,
+        // IonGrid,
+        // medias: MediaItem[]
+    } {
+        return {
+            // serverUrl: 'https://frp-dad.com:34952', // frp Server
+            // serverUrl: 'http://10.12.80.224:8443',
+            serverUrl: 'http://172.20.10.5:8443', // localhost
+            displaySearchResult: false,
+            searchMediasItemList: ref<MediaItem[]>([]),
+            queryString: '',
+            colSize: 3,
+            start: 0,
+            limit: 20,
+            dis: false,
+            searchResult: "",
         };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+    },
+    computed: {
+        visibleMedias() {
+            if (this.displaySearchResult)
+                // return this.searchMedias.filter(media => !media.isHidden);
+                return this.searchMediasItemList;
+            else
+                // return this.medias.filter(media => !media.isHidden);
+                return this.photosPageService.visibleMediasItem.value;
+        }
     },
 
-    async takePhotoAction() {
-      // show toast message
-      await toastController.create({
-        message: 'Taking photo...',
-        duration: 2000,
-      }).then((toast) => toast.present());
+    async mounted() {
+        const maxRetries = 5;
+        let attempt = 0;
+        let success = false;
 
-      const image = await Camera.getPhoto({
-        resultType: CameraResultType.Uri,
-        saveToGallery: true,
-        quality: 100,
-        source: CameraSource.Prompt,
-        promptLabelHeader: '选择来源',
-        promptLabelPhoto: '从相册中选择',
-        promptLabelPicture: '拍照',
-        promptLabelCancel: '取消',
-        // webUseInput: true,
-        // allowEditing: true,
-        // width: 100,
-        // height: 100,
-      });
-
-      try {
-        const { base64, width, height } = await this.readUriAsBlobImage(image.path ?? '');
-        toastController.create({
-          message: `width: ${width}, height: ${height}`,
-          duration: 2000,
-        }).then((toast) => { toast.present(); })
-        this.medias = [...this.medias, {
-          id: `captured-${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}`,
-          type: 'image',
-          createdAt: new Date().getMilliseconds(),
-          baseColor: '#000000',
-          name: `${image.webPath?.substring(image.webPath?.lastIndexOf('/') + 1)}.${image.format}`,
-          width: width,
-          height: height,
-          thumbnail: base64,
-          fileSize: image.base64String?.length,
-          // path: image.path,
-          mimeType: 'image/jpeg',
-        }]
-        // toastController.create({
-        //   message: "照片成功存入相册",
-        //   duration: 2000,
-        // }).then((toast) => { toast.present(); })
-
-      } catch (e: unknown) {
-        // show toast message
-        if (e instanceof CapacitorException) {
-          toastController.create({
-            message: "错误：" + e.message,
-            duration: 2000,
-          }).then((toast) => { toast.present(); })
+        while (attempt < maxRetries && !success) {
+            try {
+                await this.photosPageService.getPaginatedMediaList(this.start, this.limit);
+                success = true;
+            } catch (error: any) {
+                attempt++;
+                await this.sleep(1000); // 等待1秒再重试
+            }
         }
-      }
+        if (!success) {
+            this.searchResult = "加载图库失败，请检查本地图库访问权限";
+            this.displaySearchResult = true;
+            console.error('Failed to load media list after multiple attempts');
+        }
     },
+    methods: {
+        // async takePhotoAction() {
+        //     const photo = await Camera.getPhoto({
+        //         resultType: CameraResultType.Uri,
+        //         source: CameraSource.Camera,
+        //         quality: 100
+        //     });
+        //     const modal = await modalController.create({
+        //         component: 'PhotoModal',
+        //         componentProps: { photo },
+        //         cssClass: 'my-custom-class'
+        //     });
+        // },
+        async showActionSheet(media: MediaItem) {
+            const fullMedia = await GalleryPlus.getMedia({
+                id: media.id,
+                includeBaseColor: true,
+                includeDetails: true,
+                includePath: true,
+            });
+            const mediaDO = await this.storageService.getMediaByIdentifier(media.id);
 
-    async handleSearch(event: any) {
-      // 1. fetch server /engine/query
-      // 2. get feature from server
-      // 3. calculate the cosine similarity
-      // 4. show the result
+            const mediaMetadata = await this.storageService.getMediaMetadataById(media.id);
 
-      // /users/active
-      if (this.databaseTensorShouldBeReload) {
-        await GalleryEngineService.loadTensorFromDB();
-        this.databaseTensorShouldBeReload = false;
-      }
-      try {
-        const response = await fetch(`${this.serverUrl}/users/active`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.getCookie('token')}`,
-          },
-        });
+            const cats = await this.storageService.getMediaTagNamesByIdentifier(media.id);
 
-        if (response.status === 401) {
-          // Token is invalid, perform login
-          const token = await this.performLogin();
-          if (token !== null) {
-            this.setCookie('token', token);
-          } else {
-            toastController.create({
-              message: 'Login failed',
-              duration: 2000,
-            }).then((toast) => { toast.present(); })
-          }
-        }
-      } catch (error) {
-        console.log(error);
-      }
-
-      try {
-        if (event.target.value === "") {
-          this.displaySearchResult = false;
-          return;
-        } else {
-          this.displaySearchResult = true;
-        }
-        const response = await fetch(`${this.serverUrl}/engine/query?query=${encodeURIComponent(event.target.value)}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + this.getCookie('token'),
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-        })
-
-        const contentType = response.headers.get('Content-Type');
-        if (contentType === 'application/octet-stream') {
-          response.arrayBuffer().then(async (arrayBuffer) => {
-            console.log("Got Array Buffer, length = " + arrayBuffer.byteLength);
-
-            // ✅ 转换 `ArrayBuffer` 为 `Uint8Array`
-            const float32Array = new Float32Array(arrayBuffer);
-
-            // ✅ 转换为 JS 数组（否则 Capacitor 不支持）
-            const tensorArray = Array.from(float32Array);
-
-            const prob = await GalleryEngineService.calculateCosineSimilarity(tensorArray)
-
-            // TODO: show the result
-            // resultType: [1,0,0,0,0,0,0,...]
-            // invisiblize the img which corelation is less than 0.8
-            // for a turple, the first is the prob, the second is the image
-
-            // 方法一：小于0.6的隐藏
-            // this.medias = this.medias.map((media, index) => {
-            //   if (prob[index] < 0.6) {
-            //     media.isHidden = true;
-            //   } else {
-            //     media.isHidden = false;
-            //   }
-            //   return media;
-            // });
-            // console.log(prob);
-
-            // 方法二：将medias和prob看成整体，按照prob对应的大小、位置降序排序，取前五个设置isHidden为false，其余为true
-            const probWithIndex = prob.map((value, index) => ({ value, index }));
-            probWithIndex.sort((a, b) => b.value - a.value);
-            // console.log(probWithIndex);
-            this.searchMedias = [];
-            const right = Math.min(5, probWithIndex.length);
-            probWithIndex.slice(0, right).forEach((item) => {
-              this.searchMedias.push(this.medias[item.index]);
+            const modal = await modalController.create({
+                component: MediaInfoModalComponent,
+                componentProps: {
+                    media: fullMedia,
+                    mediaDO: mediaDO,
+                    mediaMetadata: mediaMetadata,
+                    cats: cats
+                },
+                presentingElement: document.querySelector('.ion-page') as any
             });
 
-            // 输出前10个
-            console.log(probWithIndex.slice(0, right));
-            console.log(this.searchMedias.slice(0, right));
-
-          });
-        }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-      console.log("Search Done.");
-    },
-
-    async showActionSheet(media: MediaItem) {
-      const data = await GalleryPlus.getMedia({
-        id: media.id,
-        includeBaseColor: true,
-        includeDetails: true,
-        includePath: true,
-      });
-
-      const modal = await modalController.create({
-        component: MediaInfoModalComponent,
-        componentProps: {
-          media: data
+            await modal.present();
         },
-        presentingElement: document.querySelector('.ion-page') as any
-      });
 
-      await modal.present();
+        async performLogin(): Promise<string> {
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin');
+                const response = await fetch(this.serverUrl + '/users/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+                const data = await response.json();
+                return data.access_token;
+            } catch (error) {
+                console.error('Error:', error);
+                return '';
+            }
+        },
+
+        async handleClearSearch() {
+            this.queryString = '';
+            this.displaySearchResult = false;
+        },
+
+        async handleSearch(event: any) {
+            // 1. fetch server /engine/query
+            // 2. get feature from server
+            // 3. calculate the cosine similarity
+            // 4. show the result
+
+            if (event.target.value === "") {
+                this.displaySearchResult = false;
+                return;
+            } else {
+                this.displaySearchResult = true;
+                this.searchResult = "正在搜索...";
+                this.searchMediasItemList = [];
+            }
+
+            // /users/active
+            try {
+                const response = await fetch(`${this.serverUrl}/users/active`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.getCookie('token')}`,
+                    },
+                });
+
+                if (response.status === 401) {
+                    // Token is invalid, perform login
+                    const token = await this.performLogin();
+                    if (token !== null) {
+                        this.setCookie('token', token);
+                    } else {
+                        toastController.create({
+                            message: 'Login failed',
+                            duration: 2000,
+                        }).then((toast) => { toast.present(); })
+                    }
+                }
+            } catch (error) {
+                console.log(error);
+            }
+
+            try {
+                ///////// Query V1 //////////
+                // const response = await fetch(`${this.serverUrl}/engine/query?query=${encodeURIComponent(event.target.value)}`, {
+                //   method: 'GET',
+                //   headers: {
+                //     'Content-Type': 'application/json',
+                //     'Authorization': 'Bearer ' + this.getCookie('token'),
+                //     'X-Requested-With': 'XMLHttpRequest',
+                //   },
+                // })
+
+                // const contentType = response.headers.get('Content-Type');
+                // if (contentType === 'application/octet-stream') {
+                //   response.arrayBuffer().then(async (arrayBuffer) => {
+                //     console.log("Got Array Buffer, length = " + arrayBuffer.byteLength);
+
+                //     // ✅ 转换 `ArrayBuffer` 为 `Uint8Array`
+                //     const float32Array = new Float32Array(arrayBuffer);
+
+                //     // ✅ 转换为 JS 数组（否则 Capacitor 不支持）
+                //     const tensorArray = Array.from(float32Array);
+
+                //     const prob = await GalleryEngineService.calculateCosineSimilarity(tensorArray)
+
+                //     // TODO: show the result
+                //     // resultType: [1,0,0,0,0,0,0,...]
+                //     // invisiblize the img which corelation is less than 0.8
+                //     // for a turple, the first is the prob, the second is the image
+
+                //     // 方法一：小于0.6的隐藏
+                //     // this.medias = this.medias.map((media, index) => {
+                //     //   if (prob[index] < 0.6) {
+                //     //     media.isHidden = true;
+                //     //   } else {
+                //     //     media.isHidden = false;
+                //     //   }
+                //     //   return media;
+                //     // });
+                //     // console.log(prob);
+
+                //     // 方法二：将medias和prob看成整体，按照prob对应的大小、位置降序排序，取前五个设置isHidden为false，其余为true
+                //     const probWithIndex = prob.map((value, index) => ({ value, index }));
+                //     probWithIndex.sort((a, b) => b.value - a.value);
+                //     // console.log(probWithIndex);
+                //     this.searchMedias = [];
+                //     const right = Math.min(5, probWithIndex.length);
+                //     probWithIndex.slice(0, right).forEach((item) => {
+                //       this.searchMedias.push(this.medias[item.index]);
+                //     });
+
+                //     // 输出前10个
+                //     console.log(probWithIndex.slice(0, right));
+                //     console.log(this.searchMedias.slice(0, right));
+
+                //   });
+                // }
+                ///////// Query V1 //////////
+
+                ///////// Query V3 //////////
+                const response = await fetch(`${this.serverUrl}/engine/query_v3?query=${encodeURIComponent(event.target.value)}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + this.getCookie('token'),
+                    },
+                })
+
+                if (response.status === 200) {
+                    const responseData = await response.json();
+                    const images = responseData["images"] as { id: string, score: number }[];
+                    const prompt = responseData["prompt"] as string;
+                    // images structure: { id: string, score: number }[]
+
+                    const searchResultIds = images.map(image => image.id);
+
+                    const result = await GalleryPlus.getMediaListByManyId({
+                        ids: searchResultIds,
+                        includeBaseColor: true,
+                        includeDetails: true,
+                    });
+                    this.searchResult = `关于 "${prompt}" 的搜索结果有 ${result.media.length} 个：`;
+                    this.searchMediasItemList = result.media.map((media) => {
+                        if (this.platform !== "web") {
+                            return {
+                                ...media,
+                                thumbnailV1: Capacitor.convertFileSrc(media.thumbnailV1 as string),
+                                thumbnailV2: Capacitor.convertFileSrc(media.thumbnailV2 as string),
+                            } as MediaItem;
+                        }
+                        return media;
+                    })
+                } else if (response.status === 404) {
+                    this.searchMediasItemList = [];
+                    this.searchResult = "搜索结果为空";
+                } else if (response.status === 500) {
+                    this.searchMediasItemList = [];
+                    this.searchResult = "搜索失败: " + response.statusText;
+                }
+                this.displaySearchResult = true;
+                ///////// Query V3 //////////
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        },
+
+
+        async onIonInfinite(ev: InfiniteScrollCustomEvent) {
+            this.start += this.limit;
+            await this.photosPageService.getPaginatedMediaList(this.start, this.limit);
+            ev.target.complete();
+        },
+
+        getCookie(key: string) {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.startsWith(key + '=')) {
+                    return cookie.substring(key.length + 1);
+                }
+            }
+            return null;
+        },
+        setCookie(key: string, value: string) {
+            document.cookie = key + '=' + value;
+        },
+        sleep(ms: number) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        },
+        getVisibleMediaDOById(id: string): MediaDO | undefined {
+            return this.photosPageService.visibleMediaDOs.value.find(
+                (mediaDO) => mediaDO.identifier === id
+            );
+        },
     }
-  }
-};
-
+}
 
 </script>
 
 <style scoped>
-ion-toast.newline {
-  --white-space: pre-line;
-  color: blue;
-  text-decoration-color: blue;
+.rotating {
+    animation: spin 2s linear infinite;
 }
 
-.photo-img {
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-}
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
 
-
-.photo-wall {
-  display: grid;
-  grid-template-columns: repeat(1, 1fr);
-  /* 默认每列最小宽度200px */
-  grid-gap: 10px;
-  /* transition: grid-template-columns 0.3s ease; */
-  /* 平滑过渡 */
-  width: 100%;
-  height: 100%;
-}
-
-.photo-item {
-  background-size: cover;
-  background-position: center;
-  aspect-ratio: 1;
-  /* 保证图片是正方形 */
-  height: 100%;
-}
-
-.photo-wall.full-size {
-  grid-template-columns: 1fr;
-  /* 只有一张图片时显示占满宽度 */
+    100% {
+        transform: rotate(360deg);
+    }
 }
 </style>

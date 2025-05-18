@@ -40,7 +40,7 @@ const config: CapacitorConfig = {
   },
   server: {
     cleartext: true, // 如果需要使用 HTTP 请求
-    allowNavigation: ['localhost', 'frp-dad.com'] // 允许导航的域名
+    allowNavigation: ['localhost', 'frp-dad.com', '172.20.10.5'] // 允许导航的域名
   }
 };
 

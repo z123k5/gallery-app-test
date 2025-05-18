@@ -16,5 +16,5 @@
     <file type="web" url="file://$PROJECT_DIR$/../node_modules/@capacitor/status-bar/android" />
     <file type="web" url="file://$PROJECT_DIR$/../node_modules/capacitor-gallery-plus/android" />
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_21" project-jdk-name="19" project-jdk-type="JavaSDK" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_21" project-jdk-name="corretto-21" project-jdk-type="JavaSDK" />
 </project>

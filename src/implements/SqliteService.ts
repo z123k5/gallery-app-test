@@ -65,7 +65,6 @@ class SQLiteService implements ISQLiteService {
             const msg = error.message ? error.message : error;
             throw new Error(`sqliteService.openDatabase: ${msg}`);
         }
-
     }
     async isConnection(dbName: string, readOnly: boolean): Promise<boolean> {
         try {

@@ -26,7 +26,7 @@ class InitializeAppService implements IInitializeAppService {
                 }
                 await this.storageServ.initializeDatabase();
                 if (this.platform === 'web') {
-                    await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName());
+                    // await this.sqliteServ.saveToStore(this.storageServ.getDatabaseName());
                 }
                 this.appInit = true;
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any

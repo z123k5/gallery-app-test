@@ -16,14 +16,15 @@ export const UserUpgradeStatements = [
     {
         toVersion: 2,
         statements: [
-        `CREATE TABLE IF NOT EXISTS media (
+        `CREATE TABLE media (
         identifier TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         modified_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        thumbnailV1Path TEXT,
+        thumbnailV1Path TEXT NOT NULL,
         thumbnailV2Path TEXT,
+        originalPath TEXT NOT NULL,
         source TEXT NOT NULL,
         isDeleted INTEGER DEFAULT 0,
         processInfo INTEGER DEFAULT 0,
@@ -38,7 +39,7 @@ export const UserUpgradeStatements = [
             `CREATE TABLE IF NOT EXISTS media_classes (
         media_id TEXT NOT NULL,
         class_id INTEGER NOT NULL,
-        artificial INTEGER DEFAULT 0,
+        artificial INTEGER DEFAULT 0
         PRIMARY KEY (media_id, class_id),
         FOREIGN KEY (media_id) REFERENCES media(identifier) ON DELETE CASCADE ON UPDATE CASCADE,
         FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE ON UPDATE CASCADE
@@ -66,12 +67,14 @@ export const UserUpgradeStatements = [
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );`,
             `CREATE TABLE IF NOT EXISTS media_metadata (
-            media_id TEXT NOT NULL PRIMARY KEY,
+            media_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             exif_lat REAL,
             exif_lon REAL,
             exif_dev TEXT,
             location TEXT,
+            PRIMARY KEY (media_id, metadata),
             FOREIGN KEY (media_id) REFERENCES media(identifier) ON DELETE CASCADE ON UPDATE CASCADE
         );`
         ]
