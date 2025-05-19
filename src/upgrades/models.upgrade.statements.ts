@@ -57,7 +57,6 @@ export const UserUpgradeStatements = [
         ]
     },
     {
-        fromVersion: 2,
         toVersion: 3,
         statements: [
             `CREATE TABLE IF NOT EXISTS logs (
@@ -73,7 +72,11 @@ export const UserUpgradeStatements = [
             exif_dev TEXT,
             location TEXT,
             FOREIGN KEY (media_id) REFERENCES media(identifier) ON DELETE CASCADE ON UPDATE CASCADE
-        );`
+        );`,
+            `CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );`,
         ]
     }
 ]

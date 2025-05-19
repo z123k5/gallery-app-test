@@ -89,7 +89,8 @@ export default {
   },
   data() {
     return {
-      serverUrl: 'http://172.20.10.5:8443',
+      // serverUrl: 'http://172.20.10.5:8443',
+      serverUrl: 'http://192.168.2.104:8443',
       username: '',
       password: '',
       email: '',

@@ -36,7 +36,9 @@ export class PhotosPageService {
         this.duplicateService = duplicateService;
         // this.serverUrl = 'https://frp-dad.com:34952'; // frp Server
         // this.serverUrl = 'http://10.12.80.224:8443'; // 
-        this.serverUrl = 'http://172.20.10.5:8443'; // 
+        // this.serverUrl = 'http://172.20.10.5:8443'; // 
+        this.serverUrl = 'http://192.168.2.104:8443';
+
         this.platform = sqliteService.getPlatform();
         this.visibleMediasItem = ref<MediaItem[]>([]);
         this.visibleMediaDOs = ref<MediaDO[]>([]);
@@ -138,6 +140,8 @@ export class PhotosPageService {
             }
         }
 
+        if(category === "其他") category = undefined;
+
         const mediaDO = await this.storageService.getCatgoryMediaList(startAt, limit, category);
 
         const mediaIds = mediaDO.map(entry => entry.identifier);
@@ -155,17 +159,18 @@ export class PhotosPageService {
 
             return entry;
         })
-        if (startAt === 0) {
-            this.visibleMediasItem.value = mappedMedia;
-        } else {
-            this.visibleMediasItem.value.push(...mappedMedia);
-        }
 
-        if (mappedMedia) {
-            // update visible mediaDO
-            const newMediaDOs = await this.storageService.getMediaListByManyIdentifier(mediaDO.map(entry => entry.identifier));
-            this.visibleMediaDOs.value.push(...newMediaDOs);
-        }
+        return mappedMedia;
+
+        // if (mappedMedia) {
+        //     // update visible mediaDO
+        //     const newMediaDOs = await this.storageService.getMediaListByManyIdentifier(mediaDO.map(entry => entry.identifier));
+        //     this.visibleMediaDOs.value.push(...newMediaDOs);
+        // }
+    }
+
+    saveManualCategories(mediaId: string, categories: string[]): Promise<void> {
+        return this.storageService.saveManualCategories(mediaId, categories);
     }
 
     addAheadUploadingMedia(id: string) {

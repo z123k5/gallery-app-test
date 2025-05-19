@@ -5,6 +5,7 @@
         <domain includeSubdomains="true">frp-dad.com</domain>
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">172.20.10.5</domain>
+        <domain includeSubdomains="true">192.168.2.104</domain>
         <trust-anchors>
             <certificates src="@raw/ca"/>
         </trust-anchors>

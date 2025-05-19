@@ -116,8 +116,10 @@ export default {
         const photosPageService: PhotosPageService = appInstance?.appContext.config.globalProperties.$photosPageService;
         const platform = sqliteService.getPlatform();
 
+        
+        galleryDuplicateService.loadStateFromStorage();
         photosPageService.startPrefetchService();
-        photosPageService.startMediaUploadService();
+        // photosPageService.startMediaUploadService();
         photosPageService.startPHashComputeService();
         photosPageService.startAutoCleanService();
 
@@ -149,7 +151,8 @@ export default {
         return {
             // serverUrl: 'https://frp-dad.com:34952', // frp Server
             // serverUrl: 'http://10.12.80.224:8443',
-            serverUrl: 'http://172.20.10.5:8443', // localhost
+            // serverUrl: 'http://172.20.10.5:8443', // localhost
+            serverUrl: 'http://192.168.2.104:8443',
             displaySearchResult: false,
             searchMediasItemList: ref<MediaItem[]>([]),
             queryString: '',
@@ -213,7 +216,12 @@ export default {
             });
             const mediaDO = await this.storageService.getMediaByIdentifier(media.id);
 
-            const mediaMetadata = await this.storageService.getMediaMetadataById(media.id);
+            let mediaMetadata: any;
+            try {
+                mediaMetadata = await this.storageService.getMediaMetadataById(media.id);
+            } catch (error) {
+                mediaMetadata = [];
+            }
 
             const cats = await this.storageService.getMediaTagNamesByIdentifier(media.id);
 

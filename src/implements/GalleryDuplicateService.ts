@@ -11,6 +11,13 @@ export interface SimilarPair {
     hammingDistance: number;
 }
 
+
+interface DuplicateState {
+    processedIdentifiers: string[];              // 已处理过的 identifier
+    pHashMap: Record<string, string>;            // id => pHash
+    unionFindMap: Record<string, string>;        // id => parentId
+}
+
 export class GalleryDuplicateService {
     private threshold: number = 5;
     private storageService: StorageService;
@@ -23,18 +30,68 @@ export class GalleryDuplicateService {
 
     // 带LRU替换策略的pHash Mapping Cache
     private pHashCache: LRUCache<string, string> = new LRUCache<string, string>({ max: 100 });
+    // 并查集结构：图中联通子图的快速查询结构
+    private parent: Map<string, string> = new Map();
 
     constructor(storageService: StorageService) {
         this.storageService = storageService;
+    }
+
+    // 保存状态到永久存储
+    async saveStateToStorage(): Promise<void> {
+        const state: DuplicateState = {
+            processedIdentifiers: this.medias.map(m => m.identifier),
+            pHashMap: Object.fromEntries(this.pHashCache.dump().map(([k, v]) => [k, v.value])),
+            unionFindMap: Object.fromEntries(this.parent.entries()),
+        };
+        await this.storageService.setItem('duplicateState', JSON.stringify(state));
+    }
+
+    // 从永久存储恢复状态
+    async loadStateFromStorage(): Promise<void> {
+        const raw = await this.storageService.getItem('duplicateState');
+        if (!raw) return;
+        try {
+            const state: DuplicateState = JSON.parse(raw);
+            this.pHashCache.clear();
+            for (const [k, v] of Object.entries(state.pHashMap)) {
+                this.pHashCache.set(k, v);
+            }
+            this.parent.clear();
+            for (const [k, v] of Object.entries(state.unionFindMap)) {
+                this.parent.set(k, v);
+            }
+            // 可选：恢复 medias/recentMedias
+            const allMedias = await this.storageService.getMedias();
+            this.medias = allMedias.filter(m => state.processedIdentifiers.includes(m.identifier));
+        } catch (err) {
+            console.warn('恢复状态失败:', err);
+        }
     }
 
     private generatePairKey(id1: string, id2: string): string {
         return id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
     }
 
+    private find(id: string): string {
+        if (!this.parent.has(id)) this.parent.set(id, id);
+        if (this.parent.get(id) !== id) {
+            this.parent.set(id, this.find(this.parent.get(id)!));
+        }
+        return this.parent.get(id)!;
+    }
+
+    private union(id1: string, id2: string) {
+        const root1 = this.find(id1);
+        const root2 = this.find(id2);
+        if (root1 !== root2) {
+            this.parent.set(root1, root2);
+        }
+    }
+
     async checkAndSaveDuplicateAsync(newMedia: MediaDO): Promise<SimilarPair[]> {
         const similarPairsTemp: SimilarPair[] = [];
-        const thumbnailWebpath = Capacitor.convertFileSrc(newMedia.thumbnailV2Path?? newMedia.thumbnailV1Path);
+        const thumbnailWebpath = Capacitor.convertFileSrc(newMedia.thumbnailV2Path ?? newMedia.thumbnailV1Path);
 
         let pHashNew = "";
         if (!newMedia.phash) {
@@ -47,51 +104,27 @@ export class GalleryDuplicateService {
         const mutex = await this.lock.lock();
 
         // 对比 recentMedias
-        for (const media of this.recentMedias) {
+        const compareList = [...this.recentMedias, ...(await this.getSampledMedias(20))];
+        for (const media of compareList) {
             if (media.identifier === newMedia.identifier) continue;
+
+            const id1 = newMedia.identifier;
+            const id2 = media.identifier;
+            const root1 = this.find(id1);
+            const root2 = this.find(id2);
+            if (root1 === root2) continue; // 在同一个连通分量中，跳过比较
 
             const pHashOld = await this.getPHashWithCache(media);
             const distance = this.calculateHammingDistance(newMedia.phash, pHashOld);
 
             if (distance <= this.threshold) {
-                const pairKey = this.generatePairKey(media.identifier, newMedia.identifier);
-                if (!this.pairKeySet.has(pairKey)) {
-                    similarPairsTemp.push({
-                        id1: pairKey.split("-")[0],
-                        id2: pairKey.split("-")[1],
-                        hammingDistance: distance
-                    });
-                    this.pairKeySet.add(pairKey);
-                }
-            }
-        }
-
-        // 对比历史 sampled 图片
-        const sampledPhotos = await this.getSampledMedias(20);
-        for (const photo of sampledPhotos) {
-            if (photo.identifier === newMedia.identifier) continue;
-
-            const pHashOld = await this.getPHashWithCache(photo);
-            const distance = this.calculateHammingDistance(newMedia.phash, pHashOld);
-
-            if (distance <= this.threshold) {
-                const pairKey = this.generatePairKey(photo.identifier, newMedia.identifier);
-                if (!this.pairKeySet.has(pairKey)) {
-                    similarPairsTemp.push({
-                        id1: pairKey.split("-")[0],
-                        id2: pairKey.split("-")[1],
-                        hammingDistance: distance
-                    });
-                    this.pairKeySet.add(pairKey);
-                }
+                similarPairsTemp.push({ id1, id2, hammingDistance: distance });
+                this.union(id1, id2); // 合并两个集合
             }
         }
 
         if (pHashNew) {
-            await this.storageService.updateMediaPHashByIdentifier(
-                newMedia.identifier,
-                pHashNew
-            );
+            await this.storageService.updateMediaPHashByIdentifier(newMedia.identifier, pHashNew);
         }
 
         if (similarPairsTemp.length > 0) {
@@ -102,117 +135,37 @@ export class GalleryDuplicateService {
         if (this.recentMedias.length > 10) {
             this.recentMedias.shift();
         }
+
         mutex.unlock();
+
+        this.saveStateToStorage();
 
         return similarPairsTemp;
     }
 
-
-    async getSampledMedias(count: number) {
+    async getSampledMedias(count: number): Promise<MediaDO[]> {
         // if there no enough medias, return all
         if (this.medias.length === 0) {
             const mutex = await this.lock.lock();
             this.medias = await this.storageService.getMedias();
             mutex.unlock();
         }
-        
+
         if (this.medias.length < count) {
             return this.medias;
         }
 
         // randomly sample
-        const sampledMedias = [];
-        for (let i = 0; i < count; i++) {
+        const sampledMedias: MediaDO[] = [];
+        const selected = new Set<number>();
+        while (sampledMedias.length < count) {
             const randomIndex = Math.floor(Math.random() * this.medias.length);
-            sampledMedias.push(this.medias[randomIndex]);
+            if (!selected.has(randomIndex)) {
+                sampledMedias.push(this.medias[randomIndex]);
+                selected.add(randomIndex);
+            }
         }
         return sampledMedias;
-    }
-
-    // TODO: Deprecated
-    get_base64_image_size(base64: string) {
-        //确认处理的是png格式的数据
-        if (base64.substring(0, 22) === 'data:image/png;base64,') {
-            // base64 是用四个字符来表示3个字节
-            // 我们只需要截取base64前32个字符(不计开头那22个字符)便可（24 / 3 * 4）
-            // 这里的data包含12个字符，9个字节，除去第1个字节，后面8个字节就是我们想要的宽度和高度
-            const data = base64.substring(22 + 20, 22 + 32);
-            const base64Characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-            const nums = [];
-            for (const c of data) {
-                nums.push(base64Characters.indexOf(c));
-            }
-            const bytes = [];
-            for (let i = 0; i < nums.length; i += 4) {
-                bytes.push((nums[i] << 2) + (nums[i + 1] >> 4));
-                bytes.push(((nums[i + 1] & 15) << 4) + (nums[i + 2] >> 2));
-                bytes.push(((nums[i + 2] & 3) << 6) + nums[i + 3]);
-            }
-            const width = (bytes[1] << 24) + (bytes[2] << 16) + (bytes[3] << 8) + bytes[4];
-            const height = (bytes[5] << 24) + (bytes[6] << 16) + (bytes[7] << 8) + bytes[8];
-            return {
-                width,
-                height,
-            };
-        }
-        throw Error('unsupported image type:' + base64.substring(0, 22));
-    }
-    base64ToUint8Array(base64String: string): Uint8Array {
-        const padding = '='.repeat((4 - base64String.length % 4) % 4);
-        const base64 = (base64String + padding)
-            // .replace(/\-/g, '+')
-            .replace(/_/g, '/');
-
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-
-        for (let i = 0; i < rawData.length; ++i) {
-            outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-    }
-
-    async calculatePHash(thumbnailWebPath: string): Promise<string> {
-        // const base64Data = thumbnail.split(',')[1];
-        // const buffer = this.base64ToUint8Array(base64Data);
-        // const size = this.get_base64_image_size(thumbnail);
-
-        const imageUrlToUint8Array = (url: string): Promise<{ width: number, height: number, data: Uint8Array }> => {
-            return new Promise((resolve, reject) => {
-                const image = new Image();
-                image.crossOrigin = 'anonymous'; // 避免跨域问题
-                image.src = url;
-
-                image.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = image.width;
-                    canvas.height = image.height;
-
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) {
-                        reject(new Error('无法获取 canvas 上下文'));
-                        return;
-                    }
-
-                    ctx.drawImage(image, 0, 0);
-                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    const { data } = imageData;
-
-                    resolve({ width: canvas.width, height: canvas.height, data: new Uint8Array(data.buffer) });
-                };
-
-                image.onerror = (err) => {
-                    reject(new Error('图片加载失败，检查thumbnail是否已转换WebPath: ' + JSON.stringify(err)));
-                };
-            });
-        }
-
-        const url = thumbnailWebPath;
-        console.log("prePhash url=" + url);
-        const data = await imageUrlToUint8Array(url).then((ret) => {
-            return ret
-        }).catch(console.error);
-        return bmvbhash(data as bmvImage, 8);
     }
 
     calculateHammingDistance(hash1: string, hash2: string): number {
@@ -249,4 +202,62 @@ export class GalleryDuplicateService {
         this.cachePHash(media.identifier, hash);
         return hash;
     }
+
+    async calculatePHash(thumbnailWebPath: string): Promise<string> {
+        // const base64Data = thumbnail.split(',')[1];
+        // const buffer = this.base64ToUint8Array(base64Data);
+        // const size = this.get_base64_image_size(thumbnail);
+
+        const imageUrlToUint8Array = (url: string): Promise<{ width: number, height: number, data: Uint8Array }> => {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.crossOrigin = 'anonymous'; // 避免跨域问题
+                image.src = url;
+
+                image.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = image.width;
+                    canvas.height = image.height;
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        reject(new Error('无法获取 canvas 上下文'));
+                        return;
+                    }
+
+                    ctx.drawImage(image, 0, 0);
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    resolve({ width: canvas.width, height: canvas.height, data: new Uint8Array(imageData.data.buffer) });
+                };
+
+                image.onerror = (err) => {
+                    reject(new Error('图片加载失败，检查thumbnail是否已转换WebPath: ' + JSON.stringify(err)));
+                };
+            });
+        };
+
+        const data = await imageUrlToUint8Array(thumbnailWebPath);
+        return bmvbhash(data as bmvImage, 8);
+    }
+
+    public getDuplicateGroups(): string[][] {
+        const groups: Map<string, Set<string>> = new Map();
+
+        for (const id of this.parent.keys()) {
+            const root = this.find(id);
+            if (!groups.has(root)) groups.set(root, new Set());
+            groups.get(root)!.add(id);
+        }
+
+        // 只保留有两个以上的相似图的集合
+        const result: string[][] = [];
+        for (const group of groups.values()) {
+            if (group.size > 1) {
+                result.push(Array.from(group));
+            }
+        }
+
+        return result;
+    }
+
 }

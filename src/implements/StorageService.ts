@@ -51,6 +51,29 @@ export class StorageService implements IStorageService {
     }
     private lockCount: number = 0;
 
+    async setItem(key: string, value: any): Promise<void> {
+        const transaction = await this.lock.lock('w');
+        try {
+            const sql = `INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)`;
+            await this.db.run(sql, [key, value]);
+            if (platform === 'web') {
+                await this.sqliteServ.saveToStore(this.database);
+            }
+        } finally {
+            transaction.unlock();
+        }
+    }
+    async getItem(key: string): Promise<any> {
+        const transaction = await this.lock.lock('w');
+        try {
+            const sql = `SELECT value FROM settings WHERE key = ?`;
+            const result = await this.db.query(sql, [key]);
+            return result.values?.[0]?.value;
+        } finally {
+            transaction.unlock();
+        }
+    }
+
     async initializeDatabase(): Promise<void> {
         //         console.debug('lockCount++ initializeDatabase', ++this.lockCount);
         const transaction = await this.lock.lock('w');
@@ -496,6 +519,59 @@ export class StorageService implements IStorageService {
         }
     }
 
+    async addTagManually(tag: string): Promise<void> {
+        const transaction = await this.lock.lock('w');
+        try {
+            const sql = `INSERT INTO classes (name, artificial) VALUES (?, 1);`;
+            this.db.run(sql, [tag]);
+        } catch (error: any) {
+            console.error(`Error adding tag: ${error.message}`);
+            throw new Error(error.message);
+        } finally {
+
+            transaction.unlock();
+        }
+    }
+
+    async deleteTagManually(tag: string): Promise<void> {
+        const transaction = await this.lock.lock('w');
+        try {
+            const sql = `DELETE FROM classes WHERE name = ?; AND artificial = 1`;
+            this.db.run(sql, [tag]);
+        } catch (error: any) {
+            console.error(`Error deleting tag: ${error.message}`);
+            throw new Error(error.message);
+        } finally {
+            transaction.unlock();
+        }
+    }
+
+    async saveManualCategories(
+        identifier: string,
+        categories: string[],
+    ) : Promise<void> {
+        const transaction = await this.lock.lock('w');
+        try {
+            // delete old categories
+            const deleteSql = `DELETE FROM media_classes WHERE media_id = ?`;
+            await this.db.run(deleteSql, [identifier]);
+
+            const sql = `INSERT INTO media_classes (media_id, class_id, artificial) VALUES (?, ?, ?)`;
+            const tagIds = categories.map((tag) => {
+                const tagId = this.tagsListCache.indexOf(tag) + 1;
+                if (tagId === -1) {
+                    throw new Error(`storageService.saveManualCategories: tag not found`);
+                }
+                return tagId;
+            });
+            for (const tagId of tagIds) {
+                await this.db.run(sql, [identifier, tagId, 1]);
+            }
+        } finally {
+            transaction.unlock();
+        }
+    }
+
     getTagIdsByTagNames(tagNames: string[]): number[] {
         // get from tagsListCache
         return tagNames.map(tagName => {
@@ -580,15 +656,15 @@ export class StorageService implements IStorageService {
         let sql = '';
         try {
             if (category === undefined) {
-                // 查询所有媒体，不带分类过滤
+                // 查询所有没有分类的媒体(media_classes表没有记录identifier的媒体)
                 sql = `
-                SELECT m.* 
+                SELECT m.*
                 FROM media m
                 LEFT JOIN media_classes mc ON m.identifier = mc.media_id
-                GROUP BY m.identifier
+                WHERE mc.media_id IS NULL
                 ORDER BY m.created_at DESC
                 LIMIT ? OFFSET ?
-            `;
+                `;
                 const result = await this.db.query(sql, [limit, startAt]);
                 return result.values as MediaDO[];
             } else {

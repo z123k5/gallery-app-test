@@ -12,67 +12,53 @@
         </ion-toolbar>
       </ion-header>
 
-      <!-- <div v-for="cat in cats" :key="cat.id" @click="goToCategory(cat)">
-        <ion-card id="photo-wall" class="photo-wall">
-          <ion-card-header>
+      <div v-for="cat in cats" :key="cat.id" style="margin-bottom: 20px;">
+        <ion-card>
+          <!-- Add a long press listener on the header -->
+          <ion-card-header
+            @mousedown.right.prevent
+            @touchstart.prevent="startLongPress(cat)"
+            @touchend="endLongPress"
+            @mouseup="endLongPress"
+          >
             <ion-card-title>{{ cat.name }}</ion-card-title>
-            <ion-button>
-              <ion-icon :icon="arrowForward"></ion-icon>
-            </ion-button>
           </ion-card-header>
+
           <ion-card-content>
-            <div>
-              <div v-for="media in cat.medias" :key="media.id" class="photo-item" @click="showActionSheet(media)"
-                oading="lazy" :style="{ backgroundImage: 'url(' + media.thumbnailV1 + ')' }">
-                <div v-if="media.type === 'video'"
-                  style="position: absolute; bottom: 5px; left: 5px; color: white; background-color: rgba(0, 0, 0, 0.5); padding: 2px 5px; border-radius: 3px; font-size: 10px">
-                  <ion-icon :icon="videocam"></ion-icon>
-                </div>
-              </div>
-            </div>
+            <ion-list>
+              <ion-item v-for="media in cat.medias" :key="media.id" @click="showActionSheet(media)" :button="true">
+                <ion-thumbnail slot="start">
+                  <img loading="lazy" :src="media.thumbnailV1" />
+                </ion-thumbnail>
+                <ion-label>
+                  <h3>{{ media.name }}</h3>
+                  <p>
+                    <ion-icon :icon="calendarOutline" />
+                    {{ new Date(media.createdAt).toLocaleDateString('zh-CN') }}
+                  </p>
+                </ion-label>
+                <ion-note color="medium" slot="end">
+                  {{ media.fileSize
+                    ? (
+                      media.fileSize < 1024 ? media.fileSize + ' B' : media.fileSize < 1048576 ? (media.fileSize /
+                        1024).toFixed(2) + ' KB' : (media.fileSize / (1024 * 1024)).toFixed(2) + ' MB') : '未知' }}
+                </ion-note>
+              </ion-item>
+            </ion-list>
+            <ion-button @click="loadMoreForCategory(cat)">显示更多</ion-button>
           </ion-card-content>
         </ion-card>
-      </div> -->
-
-      <ion-list>
-        <ion-item v-for="media in visibleMedias" :key="media.id" @click="showActionSheet(media)" :button="true">
-          <ion-thumbnail slot="start">
-            <img loading="lazy" :src="media.thumbnailV1" />
-          </ion-thumbnail>
-          <ion-label>
-            <h3>{{ media.name }}</h3>
-            <p><ion-icon :icon="calendarOutline"></ion-icon> {{ new
-              Date(media.createdAt).toLocaleDateString('zh-CN') }}</p>
-            <!-- Analyze pending, analyze done, not analyzed -->
-            <ion-icon v-if="getVisibleMediaDOById(media.id)" :icon="(getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 1
-              ? checkmarkCircleOutline
-              : (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 8
-                ? removeCircleOutline
-                : (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 4
-                  ? syncOutline
-                  : null
-              " :class="{
-                              'rotating': (getVisibleMediaDOById(media.id)?.processInfo ?? 0) & 4
-                            }">
-            </ion-icon>
-            <ion-icon v-if="getVisibleMediaDOById(media.id)?.source?.startsWith('cloud')"
-              :icon="cloudOutline"></ion-icon>
-          </ion-label>
-          <ion-note color="medium" slot="end">{{ media.fileSize ? (
-            media.fileSize < 1024 ? (media.fileSize + ' B' ) : media.fileSize < 1048576 ? ((media.fileSize /
-              1024).toFixed(2) + ' KB' ) : ((media.fileSize / (1024 * 1024)).toFixed(2) + ' MB' )) : "未知" }}</ion-note>
-        </ion-item>
-      </ion-list>
-
-      <ion-infinite-scroll :disabled="displaySearchResult" @ionInfinite="onIonInfinite" threshold="100px"
-        position="bottom">
-        <ion-infinite-scroll-content loadingSpinner="bubbles" loadingText="Loading more data...">
-        </ion-infinite-scroll-content>
-      </ion-infinite-scroll>
+      </div>
 
       <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-        <ion-fab-button>
-          <ion-icon :icon="camera"></ion-icon>
+        <ion-fab-button @click="refresh">
+          <ion-icon :icon="refreshOutline"></ion-icon>
+        </ion-fab-button>
+      </ion-fab>
+
+      <ion-fab vertical="bottom" horizontal="end" slot="fixed" style="margin-bottom: 60px;">
+        <ion-fab-button @click="showAddCategoryDialog">
+          <ion-icon :icon="add"></ion-icon>
         </ion-fab-button>
       </ion-fab>
     </ion-content>
@@ -80,34 +66,91 @@
 </template>
 
 <script lang="ts">
-import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonFab, IonFabButton, IonIcon, toastController, modalController, IonCardContent, IonCardHeader, IonCard, IonButton, IonCardTitle } from '@ionic/vue';
+import {
+  IonPage,
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonContent,
+  IonFab,
+  IonFabButton,
+  IonIcon,
+  toastController,
+  modalController,
+  alertController,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonButton,
+} from '@ionic/vue';
 import { GalleryPlus, MediaItem } from 'capacitor-gallery-plus';
 import MediaInfoModalComponent from '@/components/MediaInfoModalComponent.vue';
-import { camera, arrowForward, videocam } from 'ionicons/icons';
+import { camera, arrowForward, videocam, refreshOutline, refresh } from 'ionicons/icons';
+import { calendarOutline, add } from 'ionicons/icons';
 import StorageService from '@/implements/StorageService';
-import { getCurrentInstance } from 'vue';
+import { getCurrentInstance, ref, Ref } from 'vue';
 import { useMediaStore } from '@/store/mediaStore';
 import Lock from '@/lock';
+import { PhotosPageService } from '@/implements/PhotosPageService';
 
 interface Category {
   id: number;
   name: string;
   medias: MediaItem[];
+  offset?: number;
+  artificial?: number;
 }
 
 export default {
   name: 'CategoryPage',
   setup() {
     const appInstance = getCurrentInstance();
-    const storageServ: StorageService = appInstance?.appContext.config.globalProperties.$storageServ;
+    const storageServ: StorageService =
+      appInstance?.appContext.config.globalProperties.$storageServ;
     const mediaStore = useMediaStore();
+    const photosPageService: PhotosPageService =
+      appInstance?.appContext.config.globalProperties.$photosPageService;
+
+    let cats: Ref<Category[]> = ref<Category[]>([]);
+    // 去掉自动向 tags 中添加 “其他”
+    try {
+      storageServ.getTagsNames().then((tags) => {
+        tags.forEach((tag, index) => {
+          cats.value.push({
+            id: index + 1,
+            name: tag,
+            medias: [],
+            offset: 0,
+            // 不再根据 tag 判断 artificial
+            artificial: 0,
+          });
+        });
+        // 仅在 UI 层面添加“其他”
+        cats.value.push({
+          id: new Date().getTime(),
+          name: '其他',
+          medias: [],
+          offset: 0,
+          artificial: 1,
+        });
+      });
+    } catch (error: any) {
+      console.error(error.message);
+      cats.value = [];
+    }
+
     return {
+      cats,
       storageServ,
+      photosPageService,
       mediaStore,
-      camera,
+      camera,refreshOutline,
       arrowForward,
       videocam,
-    }
+      calendarOutline,
+      add,
+    };
   },
   components: {
     IonPage,
@@ -122,142 +165,180 @@ export default {
     IonFab,
     IonFabButton,
     IonButton,
-    IonIcon
+    IonIcon,
   },
   data() {
     return {
+      // 单选当前选中的类别，选中“其他”时取消其它，选中非“其他”时取消“其他”
+      selectedCategory: '',
       onceLock: new Lock(),
-      cats: [] as Category[],
-      visibleMedias: [] as MediaItem[],
-    }
-  },
-
-  watch: {
-    "$route.path": async function (newVal, oldVal) {
-      if (newVal != oldVal && newVal == "/tabs/tab1") {
-        console.log('newVal', newVal);
-        const mutex = await this.onceLock.lock('w');
-
-        try {
-          // get medias from database by category
-          // wait until this.cats is populated
-          // then get medias from database by category
-          this.cats = [];
-
-          // get medias from router params
-          const allMedias: MediaItem[] = this.mediaStore.medias;
-
-          // Get tags names from database
-          this.storageServ.getTagsNames().then((tags) => {
-            console.log('tags', tags);
-            tags.forEach(async (tag, index) => {
-              // 从media_class表中获取分类的所有媒体ID
-              const catMediasIds = await this.storageServ.getMediaIdsByTagIds([index + 1])
-
-              // 根据媒体ID获取媒体对象
-              const catMedias = catMediasIds.map((mediaId) => {
-                return allMedias.find((media) => media.id === mediaId);
-              }).filter((media) => media !== undefined) as MediaItem[];
-
-              console.log('catMedias', catMedias);
-
-              this.cats.push({
-                id: index + 1,
-                name: tag,
-                medias: catMedias,
-              });
-            });
-          });
-          toastController.create({
-            message: '分类集锦 onmounted',
-            duration: 2000,
-            position: 'top',
-            cssClass: 'toast-class'
-          }).then((toast) => {
-            toast.present();
-          });
-          console.log('this.cats', this.cats);
-        } catch (error: any) {
-          console.error(error.message);
-          this.cats = [];
-        } finally {
-          mutex.unlock();
-
-        }
-      }
-    }
-  },
-
-  // activated is called when the component is activated (when the user navigates to this page) and retrieves the media from PhotosPage.
-  created() {
-    
+      longPressTimeout: null as any,
+      pressDuration: 700,
+      pressedCategory: null as Category | null,
+    };
   },
   methods: {
+    refresh() {
+      this.cats = [];
+      try {
+      this.storageServ.getTagsNames().then((tags) => {
+        tags.forEach((tag, index) => {
+          this.cats.push({
+            id: index + 1,
+            name: tag,
+            medias: [],
+            offset: 0,
+            // 不再根据 tag 判断 artificial
+            artificial: 0,
+          });
+        });
+        // 仅在 UI 层面添加“其他”
+        this.cats.push({
+          id: new Date().getTime(),
+          name: '其他',
+          medias: [],
+          offset: 0,
+          artificial: 1,
+        });
+      });
+    } catch (error: any) {
+      console.error(error.message);
+      this.cats = [];
+    }
+      this.cats.forEach((cat) => {
+        cat.medias = [];
+        cat.offset = 0;
+        this.loadMoreForCategory(cat);
+      });
+      
+    },
+    selectCategory(cat: Category) {
+      if (cat.name === '其他') {
+        this.selectedCategory = '其他';
+      } else {
+        this.selectedCategory = cat.name;
+      }
+    },
     async showActionSheet(media: MediaItem) {
+      // 保持原逻辑：若无类别，自动视为“其他”
       const fullMedia = await GalleryPlus.getMedia({
         id: media.id,
         includeBaseColor: true,
         includeDetails: true,
         includePath: true,
       });
-
       const mediaDO = await this.storageServ.getMediaByIdentifier(media.id);
+      const mediaMetadata = await this.storageServ.getMediaMetadataById(media.id);
+      const cats = await this.storageServ.getMediaTagNamesByIdentifier(media.id);
+
+      if (!cats || cats.length === 0) {
+        cats.push('其他');
+      }
 
       const modal = await modalController.create({
         component: MediaInfoModalComponent,
         componentProps: {
           media: fullMedia,
-          mediaDO: mediaDO
+          mediaDO,
+          mediaMetadata,
+          cats,
         },
-        presentingElement: document.querySelector('.ion-page') as any
+        presentingElement: document.querySelector('.ion-page') as any,
       });
-
       await modal.present();
     },
-    async goToCategory(cat: Category) {
-      // TODO: navigate to category page
-      this.visibleMedias = cat.medias;
-    }
-  }
-}
-
+    async loadMoreForCategory(cat: Category) {
+      if (!cat.offset) cat.offset = 0;
+      const newMedias = await this.photosPageService.getPaginatedCatgoryMediaList(
+        cat.offset,
+        10,
+        cat.name,
+      );
+      cat.medias.push(...newMedias);
+      cat.offset += newMedias.length;
+    },
+    async showAddCategoryDialog() {
+      const alert = await alertController.create({
+        header: '添加类别',
+        inputs: [
+          {
+            name: 'categoryName',
+            type: 'text',
+            placeholder: '输入类别名称',
+          },
+        ],
+        buttons: [
+          {
+            text: '取消',
+            role: 'cancel',
+          },
+          {
+            text: '确定',
+            handler: (data) => {
+              if (!data.categoryName) {
+                return false;
+              }
+              // 禁止手动添加“其他”
+              if (data.categoryName === '其他') {
+                return false;
+              }
+              try {
+                this.addCategory(data.categoryName);
+              } catch (e) {
+                return false;
+              }
+            },
+          },
+        ],
+      });
+      await alert.present();
+    },
+    addCategory(name: string) {
+      if (!name) return;
+      this.storageServ.addTagManually(name);
+      this.cats.push({
+        id: this.cats.length + 1,
+        name,
+        medias: [],
+        offset: 0,
+        artificial: 1,
+      });
+      this.loadMoreForCategory(this.cats[this.cats.length - 1]);
+    },
+    startLongPress(cat: Category) {
+      this.pressedCategory = cat;
+      this.longPressTimeout = setTimeout(() => {
+        this.openCategoryMenu(cat);
+      }, this.pressDuration);
+    },
+    endLongPress() {
+      clearTimeout(this.longPressTimeout);
+      this.longPressTimeout = null;
+      this.pressedCategory = null;
+    },
+    async openCategoryMenu(cat: Category) {
+      if (cat.artificial !== 1 || cat.name === '其他') return;
+      const actionAlert = await alertController.create({
+        header: '操作',
+        buttons: [
+          {
+            text: '删除分类',
+            handler: () => {
+              this.removeCategory(cat);
+            },
+          },
+          {
+            text: '取消',
+            role: 'cancel',
+          },
+        ],
+      });
+      await actionAlert.present();
+    },
+    removeCategory(cat: Category) {
+      this.storageServ.deleteTagManually(cat.name);
+      this.cats = this.cats.filter((c) => c !== cat);
+    },
+  },
+};
 </script>
-
-<style scoped>
-ion-toast.newline {
-  --white-space: pre-line;
-  color: blue;
-  text-decoration-color: blue;
-}
-
-.photo-img {
-  width: 100%;
-  height: auto;
-  border-radius: 8px;
-}
-
-
-.photo-wall {
-  display: grid;
-  grid-template-columns: repeat(1, 1fr);
-  /* 默认每列最小宽度200px */
-  grid-gap: 10px;
-  /* transition: grid-template-columns 0.3s ease; */
-  /* 平滑过渡 */
-  width: 100%;
-  height: 100%;
-}
-
-.photo-item {
-  background-size: cover;
-  background-position: center;
-  aspect-ratio: 1;
-  /* 保证图片是正方形 */
-  height: 100%;
-}
-
-.photo-wall.full-size {
-  grid-template-columns: 1fr;
-  /* 只有一张图片时显示占满宽度 */
-}
-</style>

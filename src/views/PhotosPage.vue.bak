@@ -303,6 +303,8 @@ export default {
       // serverUrl: 'https://frp-dad.com:34952', // frp Server
       // serverUrl: 'http://10.12.80.224:8443',
       serverUrl: 'http://172.20.10.5:8443', // localhost
+      serverUrl: 'http://192.168.2.104:8443',
+      
       databaseTensorShouldBeReload: false,
     };
   },
